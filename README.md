@@ -2,8 +2,7 @@
 
 Guida rapida per avviare in locale ciò che è stato implementato finora.
 Per l'architettura completa vedi
-[polyglot-commerce-platform.md](polyglot-commerce-platform.md); per la
-cronaca di cosa è stato fatto e perché vedi [CLAUDE.md](CLAUDE.md).
+[polyglot-commerce-platform.md](polyglot-commerce-platform.md).
 
 ---
 
@@ -42,10 +41,10 @@ mvn -s .mvn/settings.xml spring-boot:run
 ```
 
 > Il flag `-s .mvn/settings.xml` è necessario perché il Maven di questa
-> macchina è configurato di default sui repository Nexus interni RGI,
-> raggiungibili solo in VPN aziendale. Il file `.mvn/settings.xml`,
-> locale al progetto, punta direttamente a Maven Central senza toccare
-> la configurazione condivisa della macchina.
+> macchina è configurato di default su repository interni aziendali,
+> raggiungibili solo in VPN. Il file `.mvn/settings.xml`, locale al
+> progetto, punta direttamente a Maven Central senza toccare la
+> configurazione condivisa della macchina.
 
 Il servizio parte su `http://localhost:8081`.
 
@@ -77,7 +76,8 @@ inoltrate automaticamente a `http://localhost:8081` tramite
 
 > Anche qui, `npm install` usa il registry pubblico grazie al
 > `.npmrc` locale al progetto (il registry npm di default della
-> macchina è quello interno RGI, non raggiungibile da questa rete).
+> macchina è quello interno aziendale, non raggiungibile da questa
+> rete).
 
 ---
 
