@@ -18,14 +18,13 @@
   </p>
 
   <div class="catalog__grid">
-    <a
-      *ngFor="let product of filteredProducts$ | async"
-      class="product-card"
-      [routerLink]="['/products', product.id]"
-    >
-      <h2>{{ product.name }}</h2>
-      <p class="product-card__category">{{ product.categoryName }}</p>
-      <p class="product-card__price">{{ product.price | currency: 'EUR' }}</p>
-    </a>
+    <div *ngFor="let product of filteredProducts$ | async" class="product-card">
+      <a [routerLink]="['/products', product.id]">
+        <h2>{{ product.name }}</h2>
+        <p class="product-card__category">{{ product.categoryName }}</p>
+        <p class="product-card__price">{{ product.price | currency: 'EUR' }}</p>
+      </a>
+      <button (click)="addToCart(product, $event)">+ Carrello</button>
+    </div>
   </div>
 </section>

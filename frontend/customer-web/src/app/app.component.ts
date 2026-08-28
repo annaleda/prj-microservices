@@ -1,4 +1,6 @@
 import { Component } from '@angular/core';
+import { map } from 'rxjs';
+import { CartService } from './services/cart.service';
 
 @Component({
   selector: 'app-root',
@@ -7,4 +9,10 @@ import { Component } from '@angular/core';
 })
 export class AppComponent {
   title = 'customer-web';
+
+  cartCount$ = this.cartService.items$.pipe(
+    map((items) => items.reduce((sum, item) => sum + item.quantity, 0))
+  );
+
+  constructor(private readonly cartService: CartService) {}
 }

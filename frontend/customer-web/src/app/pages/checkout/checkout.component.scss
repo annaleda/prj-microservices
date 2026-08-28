@@ -1,0 +1,44 @@
+.checkout {
+  max-width: 480px;
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+  }
+
+  th,
+  td {
+    text-align: left;
+    padding: 0.4rem 0.3rem;
+    border-bottom: 1px solid #eee;
+  }
+
+  &__total {
+    margin-bottom: 1rem;
+  }
+
+  &__success {
+    color: #1a7a34;
+  }
+
+  &__error {
+    color: #b00020;
+  }
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+    color: #444;
+  }
+
+  input,
+  select {
+    padding: 0.4em 0.5em;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+  }
+}

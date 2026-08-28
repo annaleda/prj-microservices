@@ -1,6 +1,18 @@
 {
-  "/api": {
+  "/api/products": {
     "target": "http://localhost:8081",
+    "secure": false
+  },
+  "/api/categories": {
+    "target": "http://localhost:8081",
+    "secure": false
+  },
+  "/api/orders": {
+    "target": "http://localhost:8082",
+    "secure": false
+  },
+  "/api/payments": {
+    "target": "http://localhost:8084",
     "secure": false
   }
 }

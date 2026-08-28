@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { EMPTY, Observable, catchError, switchMap } from 'rxjs';
 import { Product } from '../../models/product.model';
+import { CartService } from '../../services/cart.service';
 import { CatalogService } from '../../services/catalog.service';
 
 @Component({
@@ -15,7 +16,8 @@ export class ProductDetailComponent implements OnInit {
 
   constructor(
     private readonly route: ActivatedRoute,
-    private readonly catalogService: CatalogService
+    private readonly catalogService: CatalogService,
+    private readonly cartService: CartService
   ) {}
 
   ngOnInit(): void {
@@ -30,5 +32,9 @@ export class ProductDetailComponent implements OnInit {
         );
       })
     );
+  }
+
+  addToCart(product: Product): void {
+    this.cartService.add(product);
   }
 }

@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { BehaviorSubject, Observable, combineLatest, map, shareReplay, startWith } from 'rxjs';
 import { Category } from '../../models/category.model';
 import { Product } from '../../models/product.model';
+import { CartService } from '../../services/cart.service';
 import { CatalogService } from '../../services/catalog.service';
 
 @Component({
@@ -17,7 +18,10 @@ export class ProductListComponent implements OnInit {
   private readonly selectedCategoryId$ = new BehaviorSubject<number | null>(null);
   private readonly products$ = new BehaviorSubject<Product[]>([]);
 
-  constructor(private readonly catalogService: CatalogService) {}
+  constructor(
+    private readonly catalogService: CatalogService,
+    private readonly cartService: CartService
+  ) {}
 
   ngOnInit(): void {
     this.categories$ = this.catalogService.getCategories().pipe(
@@ -43,5 +47,11 @@ export class ProductListComponent implements OnInit {
 
   onCategoryChange(categoryId: string): void {
     this.selectedCategoryId$.next(categoryId === '' ? null : Number(categoryId));
+  }
+
+  addToCart(product: Product, event: Event): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.cartService.add(product);
   }
 }

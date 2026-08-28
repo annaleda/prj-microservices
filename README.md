@@ -81,7 +81,30 @@ inoltrate automaticamente a `http://localhost:8081` tramite
 
 ---
 
-## 2. Avviare l'infrastruttura Kubernetes con API Gateway
+## 2. Avviare Kafka in locale
+
+Il broker Kafka (modalità KRaft, senza Zookeeper) e la UI di
+ispezione fanno parte di `docker-compose.yml`:
+
+```bash
+docker compose up -d kafka kafka-init kafka-ui
+```
+
+- `kafka`: broker, raggiungibile dagli altri container come
+  `kafka:9092`, dall'host come `localhost:9094`.
+- `kafka-init`: container "one-shot" che crea i topic dell'event
+  catalog (vedi [polyglot-commerce-platform.md](polyglot-commerce-platform.md),
+  sezione 8) al primo avvio, poi termina — è normale vederlo in stato
+  `exited (0)`.
+- `kafka-ui`: interfaccia web per ispezionare topic e messaggi —
+  `http://localhost:8090`.
+
+> Nessun microservizio pubblica o consuma eventi ancora: per ora
+> questa è solo l'infrastruttura. Il collegamento reale (Saga
+> Orchestration via Integration Service/Apache Camel) è un passo
+> successivo — vedi [infrastructure/kafka/README.md](infrastructure/kafka/README.md).
+
+## 3. Avviare l'infrastruttura Kubernetes con API Gateway
 
 I manifest si trovano in `infrastructure/kubernetes/` (pattern
 base/overlays con Kustomize) e usano la **Kubernetes Gateway API**
@@ -95,7 +118,7 @@ alla prima esecuzione.
 
 - `kubectl`, `kind`, `helm` (già presenti su questa macchina)
 
-### 2.1 Creare un cluster dedicato
+### 3.1 Creare un cluster dedicato
 
 Usa un cluster **dedicato al progetto**, non un cluster kind già in
 uso per altro:
@@ -105,7 +128,7 @@ kind create cluster --name polyglot-commerce
 kubectl config use-context kind-polyglot-commerce
 ```
 
-### 2.2 Installare Envoy Gateway (il controller della Gateway API)
+### 3.2 Installare Envoy Gateway (il controller della Gateway API)
 
 ```bash
 helm install eg oci://docker.io/envoyproxy/gateway-helm \
@@ -117,7 +140,7 @@ kubectl wait --timeout=5m -n envoy-gateway-system \
   deployment/envoy-gateway --for=condition=Available
 ```
 
-### 2.3 Costruire e caricare l'immagine di Catalog Service
+### 3.3 Costruire e caricare l'immagine di Catalog Service
 
 Il cluster kind non ha accesso automatico alle immagini Docker locali:
 vanno costruite e caricate esplicitamente.
@@ -127,7 +150,7 @@ docker build -t polyglot-commerce/catalog-service:0.1.0 services/catalog-service
 kind load docker-image polyglot-commerce/catalog-service:0.1.0 --name polyglot-commerce
 ```
 
-### 2.4 Applicare i manifest (overlay locale)
+### 3.4 Applicare i manifest (overlay locale)
 
 ```bash
 kubectl apply -k infrastructure/kubernetes/overlays/local
@@ -143,7 +166,7 @@ kubectl -n polyglot-commerce get gateway polyglot-commerce-gateway
 > di rete diversa). Assicurati quindi che `docker compose up -d
 > catalog-db` sia attivo **prima** di applicare questo overlay.
 
-### 2.5 Esporre il Gateway e testare il routing
+### 3.5 Esporre il Gateway e testare il routing
 
 Envoy Gateway crea un `Service` per il listener HTTP del `Gateway`.
 Su kind (senza LoadBalancer reale) si usa `port-forward`:
@@ -166,7 +189,7 @@ curl http://localhost:8080/api/categories
 Se tutto funziona, le richieste passano: client → Gateway (Envoy) →
 `HTTPRoute` → Service `catalog-service` → Pod.
 
-### 2.6 Pulizia
+### 3.6 Pulizia
 
 ```bash
 kind delete cluster --name polyglot-commerce

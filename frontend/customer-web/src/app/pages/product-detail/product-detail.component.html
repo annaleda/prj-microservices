@@ -6,6 +6,7 @@
   <p class="detail__price">{{ product.price | currency: 'EUR' }}</p>
   <p class="detail__sku">SKU: {{ product.sku }}</p>
   <p class="detail__description">{{ product.description }}</p>
+  <button (click)="addToCart(product)">Aggiungi al carrello</button>
 </section>
 
 <ng-template #errorOrLoading>

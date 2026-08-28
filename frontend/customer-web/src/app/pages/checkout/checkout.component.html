@@ -1,0 +1,66 @@
+<section class="checkout">
+  <h1>Checkout</h1>
+
+  <ng-container *ngIf="!order">
+    <table *ngIf="(items$ | async)?.length; else emptyCart">
+      <thead>
+        <tr>
+          <th>Prodotto</th>
+          <th>Qta</th>
+          <th>Prezzo</th>
+          <th>Totale</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let item of items$ | async">
+          <td>{{ item.productName }}</td>
+          <td>{{ item.quantity }}</td>
+          <td>{{ item.unitPrice | currency: 'EUR' }}</td>
+          <td>{{ item.quantity * item.unitPrice | currency: 'EUR' }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <ng-template #emptyCart>
+      <p>Il carrello è vuoto. <a routerLink="/">Torna al catalogo</a>.</p>
+    </ng-template>
+
+    <p class="checkout__total"><strong>Totale: {{ total | currency: 'EUR' }}</strong></p>
+
+    <label>
+      Email cliente
+      <input type="email" required [(ngModel)]="customerEmail" name="customerEmail" />
+    </label>
+
+    <button (click)="placeOrder()" [disabled]="submitting || !customerEmail || total === 0">
+      Effettua ordine
+    </button>
+  </ng-container>
+
+  <ng-container *ngIf="order && !payment">
+    <p>Ordine #{{ order.id }} creato — stato: {{ order.status }}.</p>
+    <p>Totale da pagare: {{ order.totalAmount | currency: 'EUR' }}</p>
+
+    <label>
+      Metodo di pagamento
+      <select [(ngModel)]="paymentMethod" name="paymentMethod">
+        <option value="CARD">Carta</option>
+        <option value="PAYPAL">PayPal</option>
+      </select>
+    </label>
+
+    <button (click)="pay()" [disabled]="submitting">Paga ora</button>
+  </ng-container>
+
+  <ng-container *ngIf="payment">
+    <p *ngIf="payment.status === 'COMPLETED'" class="checkout__success">
+      Pagamento completato — ID pagamento: {{ payment.id }}.
+    </p>
+    <p *ngIf="payment.status === 'FAILED'" class="checkout__error">
+      Pagamento rifiutato.
+    </p>
+    <a routerLink="/">Torna al catalogo</a>
+  </ng-container>
+
+  <p *ngIf="error" class="checkout__error">{{ error }}</p>
+</section>

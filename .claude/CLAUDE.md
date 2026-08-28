@@ -333,3 +333,148 @@ l'app dal browser.
 
 **Prossimo passo naturale**: Order Service (Spring Boot + Kafka), per
 completare Phase 2, oppure proseguire con Payment Service.
+
+### 9. Riferimenti al nome dell'azienda rimossi anche dal diario
+
+Su richiesta esplicita dell'utente, rimossi i riferimenti al nome
+dell'azienda anche da questo diario (`.claude/CLAUDE.md`) e dal
+commento nel `.mvn/settings.xml` del Catalog Service — non solo dal
+README come nella richiesta iniziale — perche' il diario e' tracciato
+in Git e finira' comunque su GitHub insieme al resto. Sostituiti con
+formulazioni generiche ("configurazione aziendale", "repository/registry
+interni aziendali").
+
+### 10. Order Service e Payment Service (Phase 2 completata)
+
+Scaffolding completo di entrambi in `services/order-service/` e
+`services/payment-service/`, stesso schema di Catalog Service (Spring
+Boot 2.7/Java 11, `.mvn/settings.xml` locale, REST + DB via
+Testcontainers, Kafka rimandato alla Phase 3 come gia' fatto per
+Inventory Service — annotato nel codice).
+
+**Order Service** (`orders-db`, porta 8082):
+- Modello: `Order` (stato CREATED/CONFIRMED/CANCELLED, totale calcolato
+  dagli item) con `OrderItem` in cascata (`OneToMany` con
+  `orphanRemoval`).
+- API: `POST/GET /api/orders`, `GET /api/orders/{id}`,
+  `PATCH /api/orders/{id}/status`.
+- Regola di business: un ordine CANCELLED non puo' piu' cambiare stato
+  (409 se ci si prova).
+
+**Payment Service** (`payments-db`, porta 8084):
+- API: `POST /api/payments`, `GET /api/payments/{id}`.
+- Senza un gateway di pagamento reale ne' Kafka, l'esito
+  (COMPLETED/FAILED) e' deciso da una **regola simulata e dichiarata
+  come tale nel codice** (soglia arbitraria sull'importo) invece di
+  essere sempre COMPLETED, cosi' resta testabile anche il percorso di
+  rifiuto.
+
+**Due bug reali trovati dai test di Order Service e corretti**:
+1. Il test del 404 deserializzava la risposta di errore
+   (`ApiError`, con `status` numerico) come `OrderResponse` (con
+   `status` enum) — conflitto Jackson. Fix: nel test si legge il body
+   come `String` quando interessa solo il codice HTTP (stesso pattern
+   riapplicato preventivamente nei test di Payment Service).
+2. `TestRestTemplate` con il solo `HttpURLConnection` del JDK non
+   supporta il metodo PATCH. Fix: aggiunta `org.apache.httpcomponents:
+   httpclient` (v4, non v5 — la v5 richiede Spring 6/Boot 3, qui siamo
+   su Boot 2.7/Spring 5.3) come dipendenza di test, che Spring Boot
+   rileva automaticamente per configurare un client HTTP che supporta
+   PATCH.
+
+Verificato end-to-end contro i DB reali: creazione ordine, lettura,
+transizione di stato CONFIRMED, lista ordini; creazione pagamento
+riuscito (COMPLETED) e uno sopra soglia (FAILED), lettura, 404 su
+pagamento inesistente — tutto funzionante.
+
+### 11. Flusso carrello -> ordine -> pagamento in Customer Web
+
+Su richiesta dell'utente di poter provare Order Service e Payment
+Service dal browser, aggiunto un flusso di checkout minimale a
+Customer Web (Angular):
+
+- `CartService`: carrello in memoria (nessuna persistenza, si perde al
+  refresh — sufficiente per il test manuale, non era richiesta
+  persistenza).
+- Pulsante "Aggiungi al carrello" su lista prodotti e dettaglio
+  prodotto; contatore carrello nell'header.
+- `CheckoutComponent` (`/checkout`): riepilogo carrello -> form email
+  cliente -> crea ordine (`OrderService`) -> mostra conferma e importo
+  -> crea pagamento (`PaymentService`) -> mostra esito
+  COMPLETED/FAILED. Il carrello viene svuotato solo se il pagamento va
+  a buon fine.
+
+**Aggiornamento necessario al proxy di sviluppo**: `proxy.conf.json`
+instradava tutto `/api` verso `catalog-service` (8081). Con tre
+backend distinti dietro `/api/...` servono regole per prefisso:
+`/api/products` e `/api/categories` -> 8081, `/api/orders` -> 8082
+(Order Service), `/api/payments` -> 8084 (Payment Service) — lo stesso
+schema di routing che avra' il vero API Gateway. Nota: a differenza
+delle modifiche al codice, il proxy viene letto solo all'avvio di `ng
+serve`, quindi e' stato necessario riavviare il dev server perche' la
+modifica avesse effetto.
+
+Verificato end-to-end attraverso il proxy (`localhost:4200/api/...`):
+categorie, creazione ordine, creazione pagamento — tutti instradati
+correttamente al servizio giusto. Dev server Angular, catalog-service,
+order-service e payment-service lasciati attivi per il test
+dell'utente dal browser.
+
+**Prossimo passo naturale**: Auth Service (Keycloak/OAuth2) per dare
+identita' reale ai clienti invece dell'email libera, oppure Kafka
+(Phase 3) per collegare davvero Order -> Inventory -> Payment tramite
+eventi invece di chiamate dirette dal frontend.
+
+### 12. Kafka (Phase 3, infrastruttura)
+
+Su richiesta generica dell'utente ("fai la parte infrastructure"),
+chiarita poi con una domanda diretta tra le quattro parti previste in
+`infrastructure/` (Kafka, Keycloak, Monitoring, Gateway): scelto
+**Kafka**, propedeutico a sbloccare la Saga Orchestration gia'
+progettata ma finora solo annotata come TODO in Inventory/Order/Payment
+Service.
+
+**Decisione tecnica**: broker in modalita' **KRaft** (senza Zookeeper),
+immagine ufficiale `apache/kafka:3.8.0` — piu' semplice da gestire in
+locale di un cluster Zookeeper+Kafka separato, e ormai lo standard per
+installazioni nuove. Aggiunto a `docker-compose.yml` insieme a:
+- `kafka-init`: container "one-shot" che crea i 12 topic dell'event
+  catalog (documento di design, sezione 8) ad ogni avvio, idempotente
+  (`--if-not-exists`).
+- `kafka-ui` (Provectus): interfaccia web per ispezionare topic e
+  messaggi, utile data la natura dimostrativa/didattica del progetto —
+  aggiunta anche se non esplicitamente richiesta perche' rende
+  verificabile "e' arrivato l'evento?" senza CLI, cosa che servira'
+  appena ci sara' un producer/consumer reale.
+
+**Bug reale trovato e corretto durante il test**: l'healthcheck del
+broker (`kafka-broker-api-versions.sh --bootstrap-server
+localhost:9092`) falliva sempre, container bloccato in stato
+`starting`. Causa: `KAFKA_LISTENERS` legava il listener PLAINTEXT
+all'hostname specifico `kafka:9092` invece che a tutte le interfacce,
+quindi da *dentro* il container stesso `localhost:9092` non era
+raggiungibile (il bind risolveva solo l'IP del container sulla rete
+Docker, non anche `127.0.0.1`). **Fix**: `KAFKA_LISTENERS` su
+`0.0.0.0` per tutti i listener interni; `KAFKA_ADVERTISED_LISTENERS`
+resta invece con l'hostname/porta specifici (`kafka:9092` per gli
+altri container, `localhost:9094` per l'host) — e' quest'ultimo che
+i client usano per sapere *come* connettersi, mentre `LISTENERS`
+definisce solo su cosa il broker resta in ascolto.
+
+**Scope volutamente limitato**: solo l'infrastruttura (broker + topic).
+Nessun producer/consumer collegato nei microservizi esistenti — quel
+collegamento e' la Saga Orchestration a carico dell'Integration
+Service (Apache Camel, non ancora implementato), non qualcosa da
+anticipare con logica ad-hoc in Order/Inventory/Payment.
+
+Verificato end-to-end: `kafka` healthy, tutti i 12 topic creati
+correttamente (log di `kafka-init`, terminato con `exited (0)`),
+`kafka-ui` raggiungibile su `http://localhost:8090` (HTTP 200).
+Documentato in [README.md](../README.md) (nuova sezione 2, con
+rinumerazione della sezione Kubernetes da 2.x a 3.x) e in
+`infrastructure/kafka/README.md`.
+
+**Prossimo passo naturale**: collegare Order Service a pubblicare
+`order.created` e avviare l'Integration Service (Apache Camel) come
+orchestratore della saga, oppure Auth Service (Keycloak) per
+l'identita' reale dei clienti.
