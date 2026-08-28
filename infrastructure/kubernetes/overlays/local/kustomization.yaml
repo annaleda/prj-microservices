@@ -10,8 +10,29 @@ patches:
       - op: replace
         path: /spec/replicas
         value: 1
-  # In locale non esiste ancora un Postgres in-cluster: si riusa
-  # catalog-db avviato via docker-compose sull'host, raggiungibile da
+  - target:
+      kind: Deployment
+      name: order-service
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  - target:
+      kind: Deployment
+      name: inventory-service
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  - target:
+      kind: Deployment
+      name: payment-service
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  # In locale non esiste ancora un Postgres in-cluster: si riusano i
+  # database avviati via docker-compose sull'host, raggiungibili da
   # dentro kind (su Docker Desktop) come host.docker.internal.
   - target:
       kind: ConfigMap
@@ -23,3 +44,33 @@ patches:
       - op: replace
         path: /data/CATALOG_DB_PORT
         value: "5434"
+  - target:
+      kind: ConfigMap
+      name: order-service-config
+    patch: |-
+      - op: replace
+        path: /data/ORDERS_DB_HOST
+        value: host.docker.internal
+      - op: replace
+        path: /data/ORDERS_DB_PORT
+        value: "5435"
+  - target:
+      kind: ConfigMap
+      name: inventory-service-config
+    patch: |-
+      - op: replace
+        path: /data/INVENTORY_DB_HOST
+        value: host.docker.internal
+      - op: replace
+        path: /data/INVENTORY_DB_PORT
+        value: "5437"
+  - target:
+      kind: ConfigMap
+      name: payment-service-config
+    patch: |-
+      - op: replace
+        path: /data/PAYMENTS_DB_HOST
+        value: host.docker.internal
+      - op: replace
+        path: /data/PAYMENTS_DB_PORT
+        value: "5436"

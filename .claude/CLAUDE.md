@@ -478,3 +478,50 @@ rinumerazione della sezione Kubernetes da 2.x a 3.x) e in
 `order.created` e avviare l'Integration Service (Apache Camel) come
 orchestratore della saga, oppure Auth Service (Keycloak) per
 l'identita' reale dei clienti.
+
+### 13. Manifest Kubernetes per Order/Inventory/Payment Service
+
+Dopo Kafka, seconda parte della richiesta generica "fai la parte
+infrastructure": finora solo `catalog-service` aveva manifest completi
+in `infrastructure/kubernetes/base/`, gli altri tre servizi scritti da
+allora (Order, Inventory, Payment) ne erano privi. Chiesto
+esplicitamente all'utente se completare i manifest o testare dal vivo
+su un cluster kind dedicato (come proposto in precedenza): scelto
+**solo il completamento dei manifest**, senza deploy.
+
+Aggiunti `base/order-service/`, `base/inventory-service/`,
+`base/payment-service/`, stesso schema di `catalog-service`
+(ConfigMap, Secret, Deployment con probe, Service, HTTPRoute), con due
+differenze degne di nota:
+
+- **Inventory Service** (FastAPI) espone solo `/health`, non i gruppi
+  `readiness`/`liveness` separati di Spring Boot Actuator: entrambi i
+  probe del Deployment puntano li', annotato nel manifest stesso —
+  meno preciso di un readiness check che verifichi davvero la
+  connessione al DB, ma coerente con cio' che il servizio espone
+  realmente oggi.
+- **HTTPRoute** per servizio: `/api/orders` -> order-service,
+  `/api/inventory` -> inventory-service, `/api/payments` ->
+  payment-service, seguendo la tabella di routing del documento di
+  design (sezione 7).
+
+Aggiornati di conseguenza `base/kustomization.yaml` (include dei tre
+nuovi componenti) e `overlays/local/kustomization.yaml`: stesse due
+patch gia' usate per catalog-service (repliche a 1, DB via
+`host.docker.internal:<porta>`) replicate per gli altri tre.
+
+Verificato solo localmente, come da richiesta: `kubectl kustomize
+overlays/local` renderizza correttamente tutti e 4 i servizi (429
+righe, patch applicate correttamente su tutti i ConfigMap/Deployment),
+`kubectl apply --dry-run=client` valida gli 8 oggetti standard
+(ConfigMap/Secret/Service/Deployment x4) — Gateway/GatewayClass/HTTPRoute
+restano non verificabili senza le loro CRD, come gia' per
+catalog-service, essendo tuttora un deploy mai eseguito.
+
+Aggiornato [README.md](../README.md) sezione 3: build/load immagine
+ora in loop su tutti e 4 i servizi, curl di verifica estesi a
+orders/inventory/payments.
+
+**Prossimo passo naturale**: provare per davvero il deploy su un
+cluster kind dedicato (proposta ancora in sospeso), oppure Integration
+Service (Camel) per la saga.

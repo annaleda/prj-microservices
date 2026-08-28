@@ -140,14 +140,16 @@ kubectl wait --timeout=5m -n envoy-gateway-system \
   deployment/envoy-gateway --for=condition=Available
 ```
 
-### 3.3 Costruire e caricare l'immagine di Catalog Service
+### 3.3 Costruire e caricare le immagini dei servizi
 
 Il cluster kind non ha accesso automatico alle immagini Docker locali:
-vanno costruite e caricate esplicitamente.
+vanno costruite e caricate esplicitamente, una per servizio.
 
 ```bash
-docker build -t polyglot-commerce/catalog-service:0.1.0 services/catalog-service
-kind load docker-image polyglot-commerce/catalog-service:0.1.0 --name polyglot-commerce
+for svc in catalog-service order-service inventory-service payment-service; do
+  docker build -t "polyglot-commerce/$svc:0.1.0" "services/$svc"
+  kind load docker-image "polyglot-commerce/$svc:0.1.0" --name polyglot-commerce
+done
 ```
 
 ### 3.4 Applicare i manifest (overlay locale)
@@ -159,12 +161,12 @@ kubectl -n polyglot-commerce get gateway polyglot-commerce-gateway
 ```
 
 > **Nota sul database**: nel cluster non c'è (ancora) un Postgres
-> in-cluster. L'overlay `local` fa puntare `catalog-service` al
-> `catalog-db` avviato via `docker compose` sull'host, raggiungibile
-> da dentro kind come `host.docker.internal:5434` (funziona su Docker
+> in-cluster. L'overlay `local` fa puntare ciascun servizio al proprio
+> database avviato via `docker compose` sull'host, raggiungibile da
+> dentro kind come `host.docker.internal:<porta>` (funziona su Docker
 > Desktop per Windows/Mac; su Linux potrebbe servire una configurazione
-> di rete diversa). Assicurati quindi che `docker compose up -d
-> catalog-db` sia attivo **prima** di applicare questo overlay.
+> di rete diversa). Assicurati quindi che `docker compose up -d` (tutti
+> i database) sia attivo **prima** di applicare questo overlay.
 
 ### 3.5 Esporre il Gateway e testare il routing
 
@@ -184,10 +186,13 @@ In un altro terminale:
 ```bash
 curl http://localhost:8080/api/products
 curl http://localhost:8080/api/categories
+curl http://localhost:8080/api/orders
+curl http://localhost:8080/api/inventory/1
+curl http://localhost:8080/api/payments/1
 ```
 
 Se tutto funziona, le richieste passano: client → Gateway (Envoy) →
-`HTTPRoute` → Service `catalog-service` → Pod.
+`HTTPRoute` → Service del servizio corrispondente → Pod.
 
 ### 3.6 Pulizia
 

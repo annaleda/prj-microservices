@@ -4,3 +4,6 @@ resources:
   - namespace.yaml
   - gateway
   - catalog-service
+  - order-service
+  - inventory-service
+  - payment-service

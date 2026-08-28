@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: inventory-service-config
+  namespace: polyglot-commerce
+data:
+  INVENTORY_DB_HOST: inventory-db
+  INVENTORY_DB_PORT: "5432"
+  INVENTORY_DB_NAME: inventory
