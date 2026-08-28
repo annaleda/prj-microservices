@@ -202,3 +202,74 @@ il prodotto di test creato in precedenza).
 **Prossimo passo naturale**: Admin Web (React) per il CRUD completo
 sui prodotti, oppure proseguire con Order/Payment Service lato
 backend.
+
+### 6. README.md e piccole correzioni
+
+Creato [README.md](../README.md) alla radice del repository con due
+sezioni: come avviare Catalog Service in locale (DB, build/run Maven,
+verifica via curl/Swagger, avvio facoltativo di Customer Web) e come
+avviare in futuro l'infrastruttura Kubernetes con l'API Gateway
+(cluster kind dedicato, installazione Envoy Gateway, build/carico
+immagine, apply dell'overlay locale, port-forward per il test del
+routing) — quest'ultima parte documentata ma non ancora eseguita in
+questa sessione.
+
+Su richiesta esplicita dell'utente, dal README sono stati rimossi i
+riferimenti diretti al nome dell'azienda (sostituiti con "repository
+interni aziendali" generico) e il link a questo diario, che non deve
+essere citato pubblicamente.
+
+Il diario stesso è stato spostato dall'utente da `CLAUDE.md` (radice)
+a `.claude/CLAUDE.md`: da qui in poi **non viene più caricato
+automaticamente** come contesto a inizio sessione (solo il
+`CLAUDE.md` in radice lo è) — resta comunque il registro di
+riferimento, va solo letto esplicitamente quando serve.
+
+### 7. Inventory Service (secondo microservizio Python, Phase 2 roadmap)
+
+Scaffolding completo in `services/inventory-service/` — Python +
+FastAPI + SQLAlchemy, come da documento di design. Scelto tra i due
+servizi Python (l'altro è Analytics Service) perché è il prossimo
+passo naturale della roadmap Phase 2, insieme a Order Service (non
+ancora implementato).
+
+**Scope volutamente limitato sugli eventi**: il documento prevede che
+questo servizio consumi/pubblichi eventi Kafka (`order.created`,
+`inventory.reserved`, `inventory.rejected`, `inventory.released`), ma
+Kafka non esiste ancora nel progetto (è nella Phase 3 della roadmap) e
+nessun servizio produce `order.created` (Order Service non è stato
+scritto). Per ora l'esito delle operazioni è espresso solo tramite
+codici di stato HTTP (201/404/409); il producer/consumer Kafka verrà
+aggiunto quando l'infrastruttura di eventi sarà pronta — annotato
+esplicitamente con un commento nel codice (`app/main.py`) per non
+dimenticarlo.
+
+**Contenuto implementato**:
+- Modello dati: `InventoryItem` (scorte disponibili/riservate per
+  prodotto) e `Reservation` (prenotazioni), su `inventory-db`.
+- API REST: `GET /api/inventory/{productId}`,
+  `POST /api/inventory/reservations` (409 se le scorte disponibili non
+  bastano), `DELETE /api/inventory/reservations/{id}` (rilascia la
+  prenotazione e ripristina le scorte).
+- Seed dati di base all'avvio (stock iniziale per i product id 1/2/3,
+  idempotente).
+- Test di integrazione (`tests/test_inventory_api.py`) con
+  **Testcontainers** (Postgres reale, non mockato): copre lettura,
+  ciclo di vita completo di una prenotazione, scorte insufficienti e
+  rilascio di una prenotazione inesistente.
+- `Dockerfile` (Python 3.12 slim + uvicorn).
+
+Usato l'event handler moderno `lifespan` di FastAPI invece del
+deprecato `@app.on_event("startup")`, dopo che i test iniziali
+segnalavano il relativo `DeprecationWarning`.
+
+Verificato end-to-end: `pytest` passa (5/5, Postgres reale via
+Testcontainers); servizio avviato manualmente sulla porta 8083 contro
+`inventory-db` reale e provato con richieste HTTP dirette (health,
+lettura scorte seedate, creazione prenotazione con decremento scorte,
+rilascio con ripristino scorte, rifiuto per scorte insufficienti) —
+tutto funzionante.
+
+**Prossimo passo naturale**: Order Service (Spring Boot + Kafka), che
+è il pezzo mancante per chiudere il flusso Order → Inventory →
+Payment descritto nella Saga Orchestration del documento di design.

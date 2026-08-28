@@ -1,0 +1,23 @@
+# Java / Maven
+target/
+*.class
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Node (i singoli frontend hanno anche un proprio .gitignore piu' specifico)
+node_modules/
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Log locali di test/avvio manuale
+*.log
