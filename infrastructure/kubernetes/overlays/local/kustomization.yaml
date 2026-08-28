@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+patches:
+  - target:
+      kind: Deployment
+      name: catalog-service
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  # In locale non esiste ancora un Postgres in-cluster: si riusa
+  # catalog-db avviato via docker-compose sull'host, raggiungibile da
+  # dentro kind (su Docker Desktop) come host.docker.internal.
+  - target:
+      kind: ConfigMap
+      name: catalog-service-config
+    patch: |-
+      - op: replace
+        path: /data/CATALOG_DB_HOST
+        value: host.docker.internal
+      - op: replace
+        path: /data/CATALOG_DB_PORT
+        value: "5434"

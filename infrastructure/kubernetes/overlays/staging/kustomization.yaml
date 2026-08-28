@@ -1,0 +1,7 @@
+# Placeholder: nessuna differenza da "base" per ora. Qui andranno le
+# patch specifiche di staging (immagini da registry, secret esterni,
+# hostname del Gateway, risorse/replica reali) quando l'ambiente esistera'.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base

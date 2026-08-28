@@ -1,0 +1,30 @@
+.detail {
+  max-width: 480px;
+
+  &__back {
+    display: inline-block;
+    margin-bottom: 1rem;
+    color: #444;
+    text-decoration: none;
+  }
+
+  &__category {
+    color: #666;
+    margin: 0 0 0.5rem;
+  }
+
+  &__price {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0 0 0.5rem;
+  }
+
+  &__sku {
+    color: #999;
+    font-size: 0.85rem;
+  }
+
+  &__error {
+    color: #b00020;
+  }
+}

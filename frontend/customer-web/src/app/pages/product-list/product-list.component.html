@@ -1,0 +1,31 @@
+<section class="catalog">
+  <div class="catalog__toolbar">
+    <h1>Catalogo</h1>
+
+    <label class="catalog__filter">
+      Categoria:
+      <select (change)="onCategoryChange($any($event.target).value)">
+        <option value="">Tutte</option>
+        <option *ngFor="let category of categories$ | async" [value]="category.id">
+          {{ category.name }}
+        </option>
+      </select>
+    </label>
+  </div>
+
+  <p *ngIf="loadError" class="catalog__error">
+    Impossibile caricare i prodotti. Verifica che catalog-service sia in esecuzione.
+  </p>
+
+  <div class="catalog__grid">
+    <a
+      *ngFor="let product of filteredProducts$ | async"
+      class="product-card"
+      [routerLink]="['/products', product.id]"
+    >
+      <h2>{{ product.name }}</h2>
+      <p class="product-card__category">{{ product.categoryName }}</p>
+      <p class="product-card__price">{{ product.price | currency: 'EUR' }}</p>
+    </a>
+  </div>
+</section>

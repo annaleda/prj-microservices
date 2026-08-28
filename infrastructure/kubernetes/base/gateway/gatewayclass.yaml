@@ -1,0 +1,9 @@
+# Richiede il controller Envoy Gateway installato nel cluster (namespace
+# envoy-gateway-system), non incluso in questi manifest applicativi.
+# Vedi infrastructure/kubernetes/base/gateway/README.md per l'installazione.
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: envoy-gateway
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller

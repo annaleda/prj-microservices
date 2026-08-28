@@ -1,0 +1,18 @@
+<section class="detail" *ngIf="product$ | async as product; else errorOrLoading">
+  <a routerLink="/" class="detail__back">&larr; Torna al catalogo</a>
+
+  <h1>{{ product.name }}</h1>
+  <p class="detail__category">{{ product.categoryName }}</p>
+  <p class="detail__price">{{ product.price | currency: 'EUR' }}</p>
+  <p class="detail__sku">SKU: {{ product.sku }}</p>
+  <p class="detail__description">{{ product.description }}</p>
+</section>
+
+<ng-template #errorOrLoading>
+  <p *ngIf="loadError; else loading" class="detail__error">
+    Prodotto non trovato o catalog-service non raggiungibile.
+  </p>
+  <ng-template #loading>
+    <p>Caricamento...</p>
+  </ng-template>
+</ng-template>
