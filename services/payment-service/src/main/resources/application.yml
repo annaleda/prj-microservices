@@ -1,0 +1,32 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: payment-service
+  datasource:
+    url: jdbc:postgresql://${PAYMENTS_DB_HOST:localhost}:${PAYMENTS_DB_PORT:5436}/${PAYMENTS_DB_NAME:payments}
+    username: ${PAYMENTS_DB_USER:payments}
+    password: ${PAYMENTS_DB_PASSWORD:payments}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html

@@ -72,9 +72,9 @@ gli altri servizi Java del progetto, finché non si decide di
 aggiornare.
 
 **Problema Maven riscontrato e risolto**: il `~/.m2/settings.xml` di
-sistema (configurazione aziendale RGI) punta a repository Nexus
-interni raggiungibili solo in VPN aziendale, non risolvibili da questa
-rete. Anziché modificare la configurazione Maven condivisa della
+sistema (configurazione aziendale) punta a repository Nexus interni
+raggiungibili solo in VPN aziendale, non risolvibili da questa rete.
+Anziché modificare la configurazione Maven condivisa della
 macchina, è stato creato un file di settings **locale al progetto**
 (`services/catalog-service/.mvn/settings.xml`) che punta direttamente
 a Maven Central, usato con `mvn -s .mvn/settings.xml ...` (anche nel
@@ -171,9 +171,9 @@ Catalog Service: si lavora con l'ambiente disponibile invece di
 aggiornarlo.
 
 **Problema npm riscontrato e risolto** (stesso pattern del Maven del
-Catalog Service): il registry npm di sistema punta a
-`rgiregistry.ad.rgigroup.com`, raggiungibile solo in VPN aziendale.
-Anziché toccare la configurazione npm globale della macchina, creato
+Catalog Service): il registry npm di sistema punta a un registry
+interno aziendale, raggiungibile solo in VPN. Anziché toccare la
+configurazione npm globale della macchina, creato
 un `.npmrc` **locale al progetto** (`frontend/customer-web/.npmrc`)
 che punta a `registry.npmjs.org` direttamente; per il comando iniziale
 `ng new` (cartella non ancora esistente) usata la variabile d'ambiente
