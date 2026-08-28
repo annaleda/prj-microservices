@@ -273,3 +273,63 @@ tutto funzionante.
 **Prossimo passo naturale**: Order Service (Spring Boot + Kafka), che
 è il pezzo mancante per chiudere il flusso Order → Inventory →
 Payment descritto nella Saga Orchestration del documento di design.
+
+### 8. Admin Web (secondo frontend, React)
+
+Scaffolding in `frontend/admin-web/` — React + TypeScript, come da
+documento di design. Dashboard per il CRUD completo sui prodotti
+(create/update/delete), a differenza di Customer Web che è solo in
+lettura.
+
+**Decisione tecnica**: stesso vincolo già affrontato per Customer Web
+— Node.js installato è v16.20.2, incompatibile con Vite 5 (richiede
+Node 18/20+). Usato **Vite 4** (`npm create vite@4 -- --template
+react-ts`), ultima major compatibile con Node 16.
+
+**`.npmrc` locale al progetto**, stesso pattern già usato per
+Customer Web e per Maven sul Catalog Service, per usare il registry
+pubblico invece di quello aziendale.
+
+**Contenuto implementato**:
+- `catalogApi.ts`: client HTTP (fetch nativo, nessuna libreria
+  aggiuntiva) verso `/api/products` (GET/POST/PUT/DELETE) e
+  `/api/categories` (GET, sola lettura — coerente con la decisione
+  presa per Catalog Service di non esporre CRUD sulle categorie).
+- `ProductListPage`: tabella prodotti con azioni Modifica/Elimina.
+- `ProductFormPage`: form condiviso create/edit (route
+  `/products/new` e `/products/:id/edit`), con select categoria
+  popolata da `/api/categories`.
+- Routing via `react-router-dom`.
+- Proxy di sviluppo (`vite.config.ts`) verso `catalog-service` su
+  `localhost:8081`, stesso ruolo del `proxy.conf.json` di Customer
+  Web.
+- `Dockerfile` multi-stage (Node 20 in build + Nginx) e `nginx.conf`
+  con fallback SPA, identico nell'approccio a Customer Web.
+
+**Incidente durante il test e correzione**: avviando `docker compose`
+per verificare `catalog-db` mi trovavo per errore nella cartella
+`frontend/admin-web` invece che nella radice del progetto; Docker
+Compose non ha trovato il `.env` lì e ha *ricreato* `catalog-db` con
+credenziali vuote e una porta casuale. Rieseguito subito `docker
+compose up -d catalog-db` dalla radice per ripristinare la
+configurazione corretta (porta 5434, credenziali da `.env`) — il
+volume dati (`catalog-db-data`) non era stato toccato, quindi nessun
+dato perso, verificato poi con una query reale. **Lezione**: i comandi
+`docker compose` vanno sempre lanciati dalla radice del repository,
+mai passando solo `-f percorso/docker-compose.yml` da un'altra
+cartella, perché il file `.env` viene cercato nella working directory
+corrente, non accanto al file compose.
+
+Trovato anche un **processo `catalog-service` rimasto orfano** da una
+sessione di test precedente, ancora in ascolto sulla porta 8081:
+terminato per PID esatto prima di poter riavviare il servizio pulito.
+
+Verificato end-to-end attraverso il proxy Vite (`localhost:5173/api/...`,
+non chiamando `catalog-service` direttamente): creazione prodotto
+(201), lettura, aggiornamento (200, prezzo modificato) ed eliminazione
+(204) — intero ciclo CRUD funzionante. Dev server e `catalog-service`
+lasciati intenzionalmente attivi su richiesta dell'utente per provare
+l'app dal browser.
+
+**Prossimo passo naturale**: Order Service (Spring Boot + Kafka), per
+completare Phase 2, oppure proseguire con Payment Service.

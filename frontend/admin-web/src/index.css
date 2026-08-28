@@ -1,0 +1,55 @@
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  color: #222;
+  background-color: #fff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+h1 {
+  font-size: 1.5rem;
+  margin: 0;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.6rem 0.5rem;
+  border-bottom: 1px solid #eee;
+}
+
+button {
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  padding: 0.4em 0.9em;
+  font-size: 0.95em;
+  font-family: inherit;
+  background-color: #f4f4f4;
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: #999;
+}
+
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-size: 0.95em;
+  padding: 0.4em 0.5em;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
