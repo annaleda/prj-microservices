@@ -28,3 +28,7 @@ documentation/
 # Diario di lavoro e impostazioni locali: utili a chi lavora al progetto,
 # ma non parte del progetto stesso
 .claude/
+
+# Agent OpenTelemetry: si scarica con
+# infrastructure/monitoring/download-otel-agent.sh, non si versiona
+infrastructure/monitoring/opentelemetry-javaagent.jar

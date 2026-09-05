@@ -505,21 +505,37 @@ Stack previsto: - Prometheus - Grafana - Loki - Tempo - OpenTelemetry
 Ogni richiesta dovrà essere correlabile tramite `traceId`, `spanId` e
 `correlationId`.
 
-*Stato*: **nulla di tutto questo e' realizzato** (Phase 5 della roadmap).
-Le metriche non sono nemmeno esposte: manca
-`micrometer-registry-prometheus`, quindi Actuator pubblica solo
-`/actuator/health` e `/actuator/info`.
+*Stato*: **in gran parte realizzato**. Dettagli operativi in
+[`infrastructure/monitoring/README.md`](infrastructure/monitoring/README.md).
 
-L'unico pezzo esistente e' il **`correlationId`**, generato all'apertura
-di ogni saga e propagato invariato da tutti gli eventi successivi: e'
-tracing distribuito fatto a mano, sufficiente a ricostruire un flusso
-leggendo i log dei quattro servizi, ma senza visualizzazione ne'
-misurazione dei tempi.
+| Pezzo | Stato |
+|---|---|
+| Metriche esposte | **fatto** --- Micrometer sui servizi Spring, prometheus-fastapi-instrumentator su quello Python |
+| Prometheus | **fatto** --- raccoglie da tutti e cinque i servizi |
+| Grafana | **fatto** --- datasource provisionate (Prometheus e Jaeger) |
+| Tracing distribuito | **fatto** --- OpenTelemetry, backend Jaeger |
+| Tempo | non fatto --- il backend delle trace e' Jaeger |
+| Loki (log centralizzati) | **non fatto** |
+| Alerting | **non fatto** |
 
-Nota su dove il tracing automatico va verificato: il consumer Kafka
-dell'Inventory Service gira su un **thread dedicato**, e il contesto di
-tracing e' legato al thread. E' esattamente il punto in cui la
-propagazione automatica puo' interrompersi.
+I servizi Java sono strumentati con il **`-javaagent`** di
+OpenTelemetry, quindi **senza alcuna modifica al codice**; quello Python
+con `opentelemetry-instrument`, che pero' non copre il consumer Kafka
+costruito a mano: li' il contesto si estrae esplicitamente dagli header
+del messaggio.
+
+**Cosa si vede**: creando un ordine, una trace attraversa tre servizi
+passando da Kafka --- `order-service` pubblica, e a 31ms di distanza
+`inventory-service` e `integration-service` raccolgono lo stesso evento.
+
+**Limite noto**: la saga **non e' una trace sola**. Il tratto del
+pagamento finisce in una trace separata, perche' Camel apre un nuovo
+scambio per ogni rotta invece di continuare il contesto in arrivo. Per
+ricucire i due segmenti resta il `correlationId`, propagato
+nell'envelope di ogni evento.
+
+Manca ancora il **log strutturato con il trace id**: i servizi loggano in
+testo, quindi non si puo' saltare da un log alla sua trace.
 
 ## 12. Resilience
 
@@ -595,8 +611,35 @@ Kubernetes
 Le pipeline useranno path filtering per compilare solamente i componenti
 modificati.
 
-*Stato*: **non implementato**, `.github/workflows/` non esiste. Oggi
-test e build si lanciano a mano (vedi la sezione "Test" del README).
+*Stato*: **implementato** in `.github/workflows/ci.yml`.
+
+La pipeline usa **path filtering** (`dorny/paths-filter`): un job iniziale
+decide quali componenti sono stati toccati, e gli altri girano solo se
+serve. In un monorepo ricostruire tutto a ogni commit spreca minuti e
+nasconde il segnale.
+
+I quattro servizi Java sono un **unico job con una matrice**, non quattro
+job copiati --- stessa ragione per cui il chart Helm ha un template solo.
+
+| Job | Cosa fa |
+|---|---|
+| `changes` | decide quali componenti sono cambiati |
+| `java` | `mvn verify` sui quattro servizi Spring Boot (matrice) |
+| `inventory` | `pytest` sul servizio Python |
+| `customer-web` | test su Chrome headless e build |
+| `admin-web` | lint e build --- **nessun test**, dichiarato |
+| `helm` | `helm lint` e rendering con tutti i file di valori |
+| `docker` | costruisce le cinque immagini, senza pubblicarle |
+| `security` | Trivy sul filesystem, **non bloccante** |
+
+I test di integrazione girano con Testcontainers, quindi il job usa il
+Docker del runner. La scansione di sicurezza non blocca: con Java 11 e
+Node 16 (versioni vincolate dall'ambiente, ADR 0012) le vulnerabilita'
+note nelle dipendenze transitive sono attese, e serve vederle piuttosto
+che fermare tutto.
+
+Le immagini **non vengono pubblicate**: non esiste ancora un registry
+(vedi `values-production.yaml`).
 
 ## 15. Repository Structure
 
@@ -626,9 +669,9 @@ polyglot-commerce-platform/
 │   ├── keycloak/                      realm importabile, tema di login
 │   ├── minio/                         object storage delle immagini
 │   ├── demo/                          script per i dati dimostrativi
-│   └── monitoring/                    (previsto, Phase 5)
-├── docs/adr/                          (previsto, vedi sezione 16)
-└── .github/workflows/                 (previsto, vedi sezione 14)
+│   └── monitoring/                    Prometheus, Grafana, agent OTel
+├── docs/adr/                          12 decisioni architetturali
+└── .github/workflows/ci.yml           pipeline con path filtering
 ```
 
 Rispetto alla struttura immaginata all'inizio, due differenze
@@ -642,24 +685,29 @@ consapevoli:
 
 ## 16. Architecture Decision Records
 
-Gli ADR saranno salvati in `docs/adr/`.
+Gli ADR sono in [`docs/adr/`](docs/adr/). Registrano **una decisione
+ciascuno**: contesto, scelta, alternative scartate e conseguenze. Sono
+immutabili — una decisione che si rivela sbagliata non si modifica, si
+scrive un ADR nuovo che la supersede.
 
-*Stato*: **nessun ADR scritto**, la cartella non esiste. Le decisioni
-elencate qui sotto sono state prese davvero e sono motivate nel diario di
-lavoro, ma non sono ancora in forma di ADR.
+| # | Decisione |
+|---|---|
+| 0001 | Monorepo invece di un repository per servizio |
+| 0002 | Kafka come event backbone |
+| 0003 | Un database per servizio |
+| 0004 | Kubernetes Gateway API invece di Ingress |
+| 0005 | Keycloak come identity provider |
+| 0006 | Apache Camel per l'integrazione |
+| 0007 | Saga orchestrata, non coreografata |
+| 0008 | Autenticazione fra servizi — **rimandata**, con le condizioni per riaprirla |
+| 0009 | Helm al posto di Kustomize |
+| 0010 | Object storage per le immagini dei prodotti |
+| 0011 | La proprieta' di un ordine si basa sul claim `sub` |
+| 0012 | Versioni di Java e Node vincolate dall'ambiente |
 
-Esempi:
-
-``` text
-0001-use-monorepo.md
-0002-use-kafka.md
-0003-database-per-service.md
-0004-use-kubernetes-gateway-api.md
-0005-use-keycloak.md
-0006-use-apache-camel.md
-0007-saga-orchestration-with-camel.md
-0008-service-to-service-auth.md
-```
+Gli ultimi quattro non erano nell'elenco iniziale: sono decisioni prese
+strada facendo, due delle quali (0009 e 0011) correggono scelte
+precedenti.
 
 ## 17. Roadmap
 
@@ -711,18 +759,25 @@ realizzazione si discosta dal piano c'e' una nota.
 
 ### Phase 5 --- Observability
 
-**Nessun punto realizzato.** E' l'unica fase interamente da fare, ed e'
-anche quella che manca di piu': una saga attraversa quattro servizi e
-cinque topic, e oggi per seguirla si leggono i log di quattro processi
-correlandoli a mano con il `correlationId`.
+-   [x] Prometheus (metriche da tutti e cinque i servizi)
+-   [x] Grafana (datasource provisionate)
+-   [x] OpenTelemetry (agent Java, auto-strumentazione Python, backend
+    Jaeger)
+-   [ ] Loki --- log centralizzati
+-   [ ] Tempo --- non serve, il backend delle trace e' Jaeger
+-   [ ] Alerting --- la prima regola da scrivere e' su `saga.dlq`, che
+    deve restare vuoto
+-   [ ] Log strutturati in JSON con il `trace_id`, per saltare da un log
+    alla sua trace
 
--   [ ] Prometheus (le metriche non sono nemmeno esposte: manca
-    `micrometer-registry-prometheus`)
--   [ ] Grafana
--   [ ] Loki
--   [ ] Tempo
--   [ ] OpenTelemetry
--   [ ] Alerting
+### CI/CD (sezione 14)
+
+-   [x] GitHub Actions con path filtering
+-   [x] Test, build e lint di tutti i componenti
+-   [x] Build delle immagini Docker (senza pubblicazione)
+-   [x] Scansione di sicurezza (Trivy, non bloccante)
+-   [ ] Pubblicazione su un container registry
+-   [ ] Deploy automatico
 
 ### Phase 6 --- Advanced Architecture
 
@@ -773,15 +828,17 @@ Un microservizio è completo quando dispone di:
 | ConfigMap/Secret | fatto (chart Helm) |
 | Kubernetes Deployment e Service | fatto (scritti e validati, mai applicati) |
 | Error handling | fatto |
-| **Metrics** | **mancante** su tutti |
+| Metrics | **fatto** (Prometheus) |
 | **Structured logging** | **mancante**: log testuali, non JSON |
-| **Tracing** | **mancante** |
-| **CI pipeline** | **mancante** |
+| Tracing | **fatto** (OpenTelemetry) |
+| CI pipeline | **fatto** (GitHub Actions) |
 | **README per servizio** | **mancante**: la documentazione e' centralizzata nel README di radice |
 
-**Nessun servizio soddisfa oggi la Definition of Done per intero**: i
-quattro punti mancanti sono gli stessi per tutti e cinque, e coincidono
-con Phase 5 (observability) e sezione 14 (CI/CD).
+Restano mancanti, uguali per tutti e cinque i servizi: i **log
+strutturati** con il trace id, e un **README per servizio** (oggi la
+documentazione e' centralizzata). Gli unit test in senso stretto sono
+pochi: la copertura e' quasi tutta su test di integrazione, che e' una
+scelta e non una dimenticanza (vedi sezione 13).
 
 ## 19. Engineering Principles
 

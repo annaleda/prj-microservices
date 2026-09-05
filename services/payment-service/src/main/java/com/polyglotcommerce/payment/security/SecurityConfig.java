@@ -30,7 +30,17 @@ public class SecurityConfig {
                 .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 .and()
                 .authorizeHttpRequests(auth -> auth
-                        .antMatchers("/actuator/health/**", "/actuator/info").permitAll()
+                        // Le metriche sono raccolte da Prometheus, che non ha un
+                        // token: l'endpoint deve essere raggiungibile senza
+                        // autenticazione.
+                        //
+                        // Non espone dati sensibili (nomi di endpoint, latenze,
+                        // metriche JVM), ma non e' informazione da regalare: in
+                        // un ambiente reale gli endpoint di management vanno su
+                        // una **porta separata** (management.server.port), non
+                        // instradata dal gateway e raggiungibile solo dalla rete
+                        // interna del cluster.
+                        .antMatchers("/actuator/health/**", "/actuator/info", "/actuator/prometheus").permitAll()
                         .antMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .antMatchers(HttpMethod.POST, "/api/payments").hasRole("ADMIN")
                         .antMatchers(HttpMethod.GET, "/api/payments/**").hasAnyRole("ADMIN", "SUPPORT")

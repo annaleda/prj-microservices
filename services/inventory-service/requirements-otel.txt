@@ -1,0 +1,24 @@
+# Strumentazione OpenTelemetry, tenuta separata dalle dipendenze di base.
+#
+# Non e' necessaria per far funzionare il servizio: si installa quando si
+# vuole il tracing distribuito, e si avvia con
+#
+#   opentelemetry-instrument uvicorn app.main:app --port 8083
+#
+# L'equivalente Python del -javaagent dei servizi Java: strumenta a
+# runtime senza modificare il codice.
+-r requirements.txt
+
+# setuptools bloccato sotto la 81: opentelemetry-instrumentation 0.48b0
+# usa ancora `pkg_resources`, che vive dentro setuptools.
+#
+# Due cose si sommano: dal Python 3.12 i virtualenv non installano piu'
+# setuptools di default, e dalla setuptools 81 `pkg_resources` e' stato
+# rimosso del tutto. Senza questo vincolo l'import fallisce con
+# "No module named 'pkg_resources'" anche avendo setuptools installato.
+setuptools>=75,<81
+opentelemetry-distro==0.48b0
+opentelemetry-exporter-otlp==1.27.0
+opentelemetry-instrumentation-fastapi==0.48b0
+opentelemetry-instrumentation-sqlalchemy==0.48b0
+opentelemetry-instrumentation-confluent-kafka==0.48b0

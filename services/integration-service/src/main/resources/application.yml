@@ -16,9 +16,22 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus,metrics
   endpoint:
     health:
       show-details: always
       probes:
         enabled: true
+  metrics:
+    tags:
+      # Ogni metrica porta il nome del servizio: senza, in Prometheus i
+      # dati dei cinque servizi si sommerebbero indistinguibili.
+      application: ${spring.application.name}
+    distribution:
+      # Istogrammi delle latenze HTTP. La media non serve a niente:
+      # servono i percentili, e il p99 alto con media buona significa
+      # che una richiesta su cento va male - e quella e' di qualcuno.
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5, 0.95, 0.99

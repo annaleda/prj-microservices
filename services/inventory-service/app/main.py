@@ -3,6 +3,7 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from prometheus_fastapi_instrumentator import Instrumentator
 from sqlalchemy import text
 
 from app.database import Base, SessionLocal, engine
@@ -88,6 +89,20 @@ appena creato nasce a zero pezzi.
     lifespan=lifespan,
 )
 app.include_router(inventory_router, prefix="/api/inventory", tags=["inventory"])
+
+# Metriche in formato Prometheus su /metrics.
+#
+# I servizi Spring le espongono su /actuator/prometheus tramite
+# Micrometer; qui l'equivalente e' questo instrumentator, che misura
+# richieste, latenze e codici di stato senza toccare gli endpoint.
+#
+# `/metrics` e `/health` sono esclusi dalle metriche stesse: sono chiamati
+# di continuo da Prometheus e dalle probe di Kubernetes, e falserebbero
+# le statistiche del traffico vero.
+Instrumentator(
+    excluded_handlers=["/metrics", "/health"],
+    should_group_status_codes=False,
+).instrument(app).expose(app, include_in_schema=False)
 
 
 @app.get("/health")

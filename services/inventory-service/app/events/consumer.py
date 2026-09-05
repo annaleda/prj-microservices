@@ -35,6 +35,40 @@ logger = logging.getLogger(__name__)
 CONSUMER_GROUP = "inventory-service"
 
 
+try:
+    from opentelemetry import trace
+    from opentelemetry.propagate import extract
+    from opentelemetry.trace import SpanKind
+
+    _tracer = trace.get_tracer(__name__)
+except ImportError:  # pragma: no cover - il tracing e' facoltativo
+    _tracer = None
+
+
+def _contesto_dal_messaggio(message):
+    """Estrae il contesto di tracing dagli header del messaggio Kafka.
+
+    **Perche' a mano.** Nei servizi Java il `-javaagent` di OpenTelemetry
+    collega tutto da solo, producer e consumer compresi. In Python
+    l'auto-strumentazione copre HTTP e SQLAlchemy, e la strumentazione di
+    confluent-kafka crea sì uno span per il consumo, ma lo radica in una
+    trace **nuova** invece di agganciarlo a quella del produttore: nel
+    risultato l'Inventory Service compariva con trace proprie, scollegate
+    dall'ordine che stava processando.
+
+    Il contesto viaggia nell'header `traceparent` (standard W3C Trace
+    Context), scritto dal produttore. `extract` lo trasforma nel contesto
+    da usare come genitore: e' esattamente il meccanismo che gli agent
+    automatizzano.
+    """
+    intestazioni = {}
+    for chiave, valore in (message.headers() or []):
+        if isinstance(valore, bytes):
+            valore = valore.decode("utf-8", errors="replace")
+        intestazioni[chiave] = valore
+    return extract(intestazioni)
+
+
 class SagaConsumer(threading.Thread):
 
     def __init__(self) -> None:
@@ -63,7 +97,7 @@ class SagaConsumer(threading.Thread):
                     continue
 
                 try:
-                    self._handle(message.topic(), json.loads(message.value()))
+                    self._handle_traced(message)
                 except Exception:
                     # Il messaggio non e' processabile: finisce in DLQ e
                     # l'offset viene comunque avanzato, altrimenti bloccherebbe
@@ -78,6 +112,31 @@ class SagaConsumer(threading.Thread):
 
     def stop(self) -> None:
         self._stopping.set()
+
+    def _handle_traced(self, message) -> None:
+        """Gestisce il messaggio dentro uno span agganciato al produttore.
+
+        Senza tracing installato (`_tracer is None`) chiama direttamente
+        l'handler: l'osservabilita' e' facoltativa, il servizio no.
+        """
+        payload = json.loads(message.value())
+
+        if _tracer is None:
+            self._handle(message.topic(), payload)
+            return
+
+        with _tracer.start_as_current_span(
+            f"{message.topic()} process",
+            context=_contesto_dal_messaggio(message),
+            kind=SpanKind.CONSUMER,
+            attributes={
+                "messaging.system": "kafka",
+                "messaging.destination.name": message.topic(),
+                "messaging.kafka.partition": message.partition(),
+                "messaging.kafka.message.offset": message.offset(),
+            },
+        ):
+            self._handle(message.topic(), payload)
 
     def _handle(self, topic: str, envelope: Dict[str, Any]) -> None:
         data = envelope.get("data", {})

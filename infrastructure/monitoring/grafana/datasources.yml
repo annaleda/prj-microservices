@@ -1,0 +1,24 @@
+# Datasource create automaticamente all'avvio di Grafana (provisioning),
+# invece di configurarle a mano dalla console: come il realm di Keycloak,
+# la configurazione è versionata e ricreabile da zero.
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      timeInterval: 15s
+
+  - name: Jaeger
+    type: jaeger
+    access: proxy
+    url: http://jaeger:16686
+    jsonData:
+      # Collega una trace alle metriche: da uno span si può saltare ai
+      # grafici del servizio corrispondente.
+      tracesToMetrics:
+        datasourceUid: prometheus

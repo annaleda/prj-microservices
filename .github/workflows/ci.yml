@@ -1,0 +1,279 @@
+name: CI
+
+# Su push a main e su ogni pull request verso main.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Una pull request aggiornata annulla la corsa precedente: non serve
+# finire di testare un commit già superato.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------
+  # Path filtering: in un monorepo ricostruire tutto a ogni commit
+  # spreca minuti e nasconde il segnale. Questo job decide quali
+  # componenti sono stati toccati; gli altri girano solo se serve.
+  # ---------------------------------------------------------------
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      catalog: ${{ steps.filter.outputs.catalog }}
+      order: ${{ steps.filter.outputs.order }}
+      payment: ${{ steps.filter.outputs.payment }}
+      integration: ${{ steps.filter.outputs.integration }}
+      inventory: ${{ steps.filter.outputs.inventory }}
+      customer-web: ${{ steps.filter.outputs.customer-web }}
+      admin-web: ${{ steps.filter.outputs.admin-web }}
+      helm: ${{ steps.filter.outputs.helm }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            catalog:
+              - 'services/catalog-service/**'
+              - '.github/workflows/ci.yml'
+            order:
+              - 'services/order-service/**'
+              - '.github/workflows/ci.yml'
+            payment:
+              - 'services/payment-service/**'
+              - '.github/workflows/ci.yml'
+            integration:
+              - 'services/integration-service/**'
+              - '.github/workflows/ci.yml'
+            inventory:
+              - 'services/inventory-service/**'
+              - '.github/workflows/ci.yml'
+            customer-web:
+              - 'frontend/customer-web/**'
+              - '.github/workflows/ci.yml'
+            admin-web:
+              - 'frontend/admin-web/**'
+              - '.github/workflows/ci.yml'
+            helm:
+              - 'infrastructure/helm/**'
+              - '.github/workflows/ci.yml'
+
+  # ---------------------------------------------------------------
+  # Servizi Java. Un solo job parametrizzato con una matrice invece
+  # di quattro job copiati: stessa ragione per cui il chart Helm ha
+  # un template solo (ADR 0009).
+  #
+  # I test usano Testcontainers, quindi serve Docker: i runner
+  # ubuntu-latest ce l'hanno già.
+  # ---------------------------------------------------------------
+  java:
+    needs: changes
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: catalog-service
+            changed: ${{ needs.changes.outputs.catalog }}
+          - service: order-service
+            changed: ${{ needs.changes.outputs.order }}
+          - service: payment-service
+            changed: ${{ needs.changes.outputs.payment }}
+          - service: integration-service
+            changed: ${{ needs.changes.outputs.integration }}
+    steps:
+      - uses: actions/checkout@v4
+        if: matrix.changed == 'true'
+
+      - name: Java 11
+        if: matrix.changed == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
+          cache: maven
+
+      # -s .mvn/settings.xml punta esplicitamente a Maven Central.
+      # Sul runner non sarebbe necessario, ma usarlo mantiene il
+      # comando identico a quello che si lancia in locale.
+      - name: Test
+        if: matrix.changed == 'true'
+        working-directory: services/${{ matrix.service }}
+        run: mvn -B -s .mvn/settings.xml verify
+
+      - name: Referto dei test
+        if: matrix.changed == 'true' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-${{ matrix.service }}
+          path: services/${{ matrix.service }}/target/surefire-reports/
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------
+  # Inventory Service (Python + FastAPI)
+  # ---------------------------------------------------------------
+  inventory:
+    needs: changes
+    if: needs.changes.outputs.inventory == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: services/inventory-service/requirements-dev.txt
+
+      - name: Dipendenze
+        working-directory: services/inventory-service
+        run: pip install -r requirements-dev.txt
+
+      - name: Test
+        working-directory: services/inventory-service
+        run: python -m pytest -q
+
+  # ---------------------------------------------------------------
+  # Customer Web (Angular) — build e test su Chrome headless
+  # ---------------------------------------------------------------
+  customer-web:
+    needs: changes
+    if: needs.changes.outputs.customer-web == 'true'
+    runs-on: ubuntu-latest
+    env:
+      # Karma ha bisogno di sapere dove sta Chrome; sul runner
+      # ubuntu-latest è preinstallato.
+      CHROME_BIN: /usr/bin/google-chrome
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '16'
+          cache: npm
+          cache-dependency-path: frontend/customer-web/package-lock.json
+
+      - name: Dipendenze
+        working-directory: frontend/customer-web
+        run: npm ci
+
+      - name: Test
+        working-directory: frontend/customer-web
+        run: npm test -- --watch=false --browsers=ChromeHeadless
+
+      - name: Build
+        working-directory: frontend/customer-web
+        run: npm run build
+
+  # ---------------------------------------------------------------
+  # Admin Web (React) — lint e build.
+  # NON ha test: è l'unica parte del progetto senza, ed è dichiarato
+  # invece che nascosto dietro un job che non verifica nulla.
+  # ---------------------------------------------------------------
+  admin-web:
+    needs: changes
+    if: needs.changes.outputs.admin-web == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '16'
+          cache: npm
+          cache-dependency-path: frontend/admin-web/package-lock.json
+
+      - name: Dipendenze
+        working-directory: frontend/admin-web
+        run: npm ci
+
+      - name: Lint
+        working-directory: frontend/admin-web
+        run: npm run lint
+
+      # `npm run build` esegue prima `tsc`, quindi verifica anche i tipi.
+      - name: Build
+        working-directory: frontend/admin-web
+        run: npm run build
+
+  # ---------------------------------------------------------------
+  # Chart Helm: lint e rendering con entrambi i file di valori.
+  # `helm template` fallisce se un template è malformato, quindi è
+  # una verifica reale e non una formalità.
+  # ---------------------------------------------------------------
+  helm:
+    needs: changes
+    if: needs.changes.outputs.helm == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+
+      - name: Lint
+        working-directory: infrastructure/helm/polyglot-commerce
+        run: helm lint .
+
+      - name: Rendering (valori di default e locali)
+        working-directory: infrastructure/helm/polyglot-commerce
+        run: |
+          helm template polyglot . > /dev/null
+          helm template polyglot . -f values-local.yaml > /dev/null
+          helm template polyglot . -f values-production.yaml > /dev/null
+
+  # ---------------------------------------------------------------
+  # Immagini Docker: si verifica che i Dockerfile costruiscano.
+  # Non si pubblica nulla — non c'è ancora un registry (vedi
+  # values-production.yaml).
+  # ---------------------------------------------------------------
+  docker:
+    needs: [changes, java, inventory]
+    if: always() && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - catalog-service
+          - order-service
+          - payment-service
+          - integration-service
+          - inventory-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build (senza push)
+        uses: docker/build-push-action@v6
+        with:
+          context: services/${{ matrix.service }}
+          push: false
+          tags: polyglot-commerce/${{ matrix.service }}:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ---------------------------------------------------------------
+  # Scansione di sicurezza sul filesystem: dipendenze vulnerabili e
+  # segreti finiti nel repository.
+  #
+  # Non blocca la pipeline: su un progetto con Java 11 e Node 16
+  # (versioni vincolate dall'ambiente, ADR 0012) le vulnerabilità
+  # note nelle dipendenze transitive sono attese. Serve a vederle,
+  # non a fermare tutto.
+  # ---------------------------------------------------------------
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trivy
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '0'
+          format: table

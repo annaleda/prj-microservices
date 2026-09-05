@@ -245,6 +245,66 @@ services:
     networks:
       - commerce-network
 
+  # ---------------------------------------------------------------
+  # Observability
+  # ---------------------------------------------------------------
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+      # Necessario perche' Grafana possa interrogarlo dietro il proxy.
+      - --web.enable-lifecycle
+    ports:
+      - "${PROMETHEUS_PORT}:9090"
+    volumes:
+      - ./infrastructure/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    extra_hosts:
+      # I servizi applicativi girano sull'host, non in Docker: senza
+      # questo, dentro il container `host.docker.internal` non risolve
+      # su Linux (su Docker Desktop funziona gia').
+      - "host.docker.internal:host-gateway"
+    networks:
+      - commerce-network
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: grafana
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      # Niente registrazione ne' anonimi: e' un ambiente locale, ma le
+      # impostazioni di default di Grafana non vanno lasciate come sono.
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "${GRAFANA_PORT}:3000"
+    volumes:
+      - ./infrastructure/monitoring/grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - grafana-data:/var/lib/grafana
+    networks:
+      - commerce-network
+
+  jaeger:
+    # all-in-one: raccoglie, memorizza (in memoria) e mostra le trace.
+    #
+    # Accetta OTLP direttamente, quindi non serve un OpenTelemetry
+    # Collector in mezzo. In produzione il Collector ci starebbe: e' lui
+    # a fare campionamento, filtri e instradamento verso piu' backend.
+    image: jaegertracing/all-in-one:1.60
+    container_name: jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "${JAEGER_UI_PORT}:16686"        # interfaccia web
+      - "${JAEGER_OTLP_GRPC_PORT}:4317"  # OTLP gRPC, usato dagli agent
+      - "${JAEGER_OTLP_HTTP_PORT}:4318"  # OTLP HTTP
+    networks:
+      - commerce-network
+
 networks:
   commerce-network:
     driver: bridge
@@ -258,3 +318,5 @@ volumes:
   inventory-db-data:
   analytics-db-data:
   minio-data:
+  prometheus-data:
+  grafana-data:
