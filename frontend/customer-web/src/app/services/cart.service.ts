@@ -35,6 +35,7 @@ export class CartService {
         productName: product.name,
         quantity: 1,
         unitPrice: product.price,
+        imageUrl: product.imageUrl,
       });
     }
     this.update(items);

@@ -1,5 +1,6 @@
 import { Component } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
+import { CartItem } from '../../models/cart-item.model';
 import { cancellationMessage as messageForReason, OrderResponse } from '../../models/order.model';
 import { AuthService } from '../../services/auth.service';
 import { CartService } from '../../services/cart.service';
@@ -36,6 +37,23 @@ export class CheckoutComponent {
     return messageForReason(this.order?.cancellationReason);
   }
 
+  /** Prodotti la cui immagine non si e' caricata: si ripiega sulla banda. */
+  private readonly brokenImages = new Set<number>();
+
+  showPhoto(item: CartItem): boolean {
+    return !!item.imageUrl && !this.brokenImages.has(item.productId);
+  }
+
+  onImageError(item: CartItem): void {
+    this.brokenImages.add(item.productId);
+  }
+
+  /** Stessa banda colorata di catalogo e dettaglio, derivata dal nome. */
+  thumbnail(item: CartItem): string {
+    const hue = [...item.productName].reduce((acc, char) => acc + char.charCodeAt(0), 0) % 360;
+    return `linear-gradient(135deg, hsl(${hue} 62% 58%), hsl(${(hue + 38) % 360} 68% 46%))`;
+  }
+
   get total(): number {
     return this.cartService.snapshot.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
   }
@@ -52,8 +70,17 @@ export class CheckoutComponent {
     this.error = null;
     this.submitting = true;
 
+    // L'immagine serve solo a disegnare il carrello: all'Order Service si
+    // manda cio' che l'ordine deve contenere, non lo stato del frontend.
+    const items = this.cartService.snapshot.map(({ productId, productName, quantity, unitPrice }) => ({
+      productId,
+      productName,
+      quantity,
+      unitPrice,
+    }));
+
     this.orderService
-      .createOrder({ items: this.cartService.snapshot })
+      .createOrder({ items })
       .subscribe({
         next: (order) => {
           this.order = order;

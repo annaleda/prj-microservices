@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
-import { cancellationLabel as labelForReason, OrderResponse, OrderStatus } from '../../models/order.model';
+import { OrderResponse, OrderStatus } from '../../models/order.model';
 import { AuthService } from '../../services/auth.service';
 import { OrderService } from '../../services/order.service';
 
@@ -28,7 +28,15 @@ export class OrdersComponent implements OnInit {
 
     this.orderService.getOrders().subscribe({
       next: (orders) => {
-        this.orders = orders;
+        // Gli ordini annullati non compaiono nello storico: un acquisto che
+        // non e' andato a buon fine non e' un ordine da ricordare, e
+        // lasciarlo in elenco fa sembrare comprato qualcosa che non lo e'.
+        //
+        // Il cliente l'esito lo vede comunque, al momento del checkout e
+        // con il motivo per esteso: qui si toglie il residuo, non
+        // l'informazione. L'ordine resta nel database e resta visibile al
+        // personale interno, che deve poterci ragionare sopra.
+        this.orders = orders.filter((order) => order.status !== 'CANCELLED');
         this.loading = false;
       },
       error: (err: HttpErrorResponse) => {
@@ -41,7 +49,10 @@ export class OrdersComponent implements OnInit {
     });
   }
 
-  /** L'elenco mostra solo gli ordini di chi e' collegato: lo garantisce il backend. */
+  /**
+   * L'elenco mostra solo gli ordini di chi e' collegato (lo garantisce il
+   * backend) e, fra quelli, solo quelli non annullati.
+   */
   statusLabel(status: OrderStatus): string {
     switch (status) {
       case 'CONFIRMED':
@@ -51,11 +62,6 @@ export class OrdersComponent implements OnInit {
       default:
         return 'In lavorazione';
     }
-  }
-
-  /** Etichetta breve sotto lo stato degli ordini annullati. */
-  cancellationLabel(order: OrderResponse): string {
-    return labelForReason(order.cancellationReason);
   }
 
   itemCount(order: OrderResponse): number {

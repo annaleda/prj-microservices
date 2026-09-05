@@ -191,3 +191,101 @@
   background: #b3261e;
   color: #fff;
 }
+
+.app-header__left {
+  display: flex;
+  align-items: baseline;
+  gap: 1.5rem;
+}
+
+.app-nav {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.95rem;
+}
+
+.app-nav a {
+  color: #555;
+  text-decoration: none;
+  padding-bottom: 2px;
+  border-bottom: 2px solid transparent;
+}
+
+.app-nav a:hover {
+  color: #222;
+}
+
+.app-nav a.active {
+  color: #4f46e5;
+  border-bottom-color: #4f46e5;
+}
+
+.filter {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  color: #555;
+  cursor: pointer;
+}
+
+.filter input {
+  width: auto;
+  margin: 0;
+}
+
+/* Righe articolo dentro la cella di un ordine. */
+.order-item {
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.order-item__qty {
+  color: #777;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Gli importi non vanno spezzati su due righe. */
+td .status,
+.order-total {
+  white-space: nowrap;
+}
+
+.status {
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.status--confirmed {
+  background: #e6f4ea;
+  color: #1e7a3c;
+}
+
+.status--created {
+  background: #fff4e5;
+  color: #9a5b00;
+}
+
+.status--cancelled {
+  background: #fde8e8;
+  color: #b3261e;
+}
+
+/* Il motivo sotto lo stato: e' l'informazione per cui questa pagina
+   esiste, ma non deve gridare piu' dello stato stesso. */
+.status__reason {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 0.75rem;
+  color: #777;
+}
+
+.hint {
+  margin-top: 1.25rem;
+  font-size: 0.9rem;
+  color: #666;
+}

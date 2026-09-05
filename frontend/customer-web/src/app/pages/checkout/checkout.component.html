@@ -14,7 +14,27 @@
         </thead>
         <tbody>
           <tr *ngFor="let item of items$ | async">
-            <td>{{ item.productName }}</td>
+            <td>
+              <a
+                class="checkout__product"
+                [routerLink]="['/products', item.productId]"
+                [attr.title]="'Vai al dettaglio di ' + item.productName"
+              >
+                <img
+                  *ngIf="showPhoto(item); else noPhoto"
+                  class="checkout__photo"
+                  [src]="item.imageUrl"
+                  [alt]="item.productName"
+                  (error)="onImageError(item)"
+                />
+                <ng-template #noPhoto>
+                  <span class="checkout__thumb" [style.background]="thumbnail(item)" aria-hidden="true">
+                    {{ item.productName.charAt(0) }}
+                  </span>
+                </ng-template>
+                <span>{{ item.productName }}</span>
+              </a>
+            </td>
                 <td>
                   <div class="checkout__quantity">
                     <button

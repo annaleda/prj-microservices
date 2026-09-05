@@ -1,9 +1,9 @@
-import { useEffect } from 'react';
 import { useAuth } from 'react-oidc-context';
-import { BrowserRouter, Link, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Link, NavLink, Route, Routes } from 'react-router-dom';
 import './App.css';
 import { setAccessToken } from './api/authToken';
 import { rolesFromAccessToken } from './auth/authConfig';
+import OrderListPage from './pages/OrderListPage';
 import ProductFormPage from './pages/ProductFormPage';
 import ProductListPage from './pages/ProductListPage';
 
@@ -14,9 +14,15 @@ function App() {
 
   // Il client HTTP non e' un componente e non puo' usare hook: il token
   // corrente gli viene passato qui a ogni cambio di stato del login.
-  useEffect(() => {
-    setAccessToken(auth.user?.access_token ?? null);
-  }, [auth.user]);
+  //
+  // Durante il render e non dentro un `useEffect`: gli effect dei figli
+  // girano PRIMA di quelli del genitore, quindi con un effect la prima
+  // richiesta di una pagina appena montata partiva senza token e tornava
+  // 401 — l'errore restava a schermo anche quando il secondo tentativo
+  // andava a buon fine. Non e' un aggiornamento di stato durante il
+  // render: si scrive un valore esterno, sempre lo stesso a parita' di
+  // sessione, che il client legge al momento della chiamata.
+  setAccessToken(auth.user?.access_token ?? null);
 
   if (auth.isLoading) {
     return <p className="app-main">Verifica della sessione in corso…</p>;
@@ -50,9 +56,17 @@ function App() {
   return (
     <BrowserRouter>
       <header className="app-header">
-        <Link to="/" className="app-header__brand">
-          Polyglot Commerce &mdash; Admin
-        </Link>
+        <div className="app-header__left">
+          <Link to="/" className="app-header__brand">
+            Polyglot Commerce &mdash; Admin
+          </Link>
+          <nav className="app-nav">
+            <NavLink to="/" end>
+              Prodotti
+            </NavLink>
+            <NavLink to="/orders">Ordini</NavLink>
+          </nav>
+        </div>
         <span className="app-header__auth">
           <span>{auth.user?.profile.preferred_username}</span>
           <button onClick={() => void auth.signoutRedirect()}>Esci</button>
@@ -63,6 +77,7 @@ function App() {
           <Route path="/" element={<ProductListPage />} />
           <Route path="/products/new" element={<ProductFormPage />} />
           <Route path="/products/:id/edit" element={<ProductFormPage />} />
+          <Route path="/orders" element={<OrderListPage />} />
         </Routes>
       </main>
     </BrowserRouter>

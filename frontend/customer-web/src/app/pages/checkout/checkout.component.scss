@@ -145,6 +145,55 @@
     }
   }
 
+  // Miniatura accanto al nome: riconoscere la riga da togliere e' piu'
+  // veloce con la foto che leggendo il nome.
+  // Il prodotto e' un riquadro cliccabile che porta alla sua scheda: dal
+  // carrello si vuole spesso ricontrollare cosa si sta comprando, e prima
+  // l'unica strada era tornare al catalogo e ricercarlo.
+  &__product {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.4rem 0.75rem 0.4rem 0.4rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+    color: inherit;
+    transition: border-color 0.15s ease, background 0.15s ease;
+
+    &:hover {
+      border-color: var(--brand);
+      background: var(--surface-sunken);
+    }
+
+    // Il riquadro e' cliccabile: senza un po' d'aria il "-" della
+    // quantita' gli finisce attaccato e sembra farne parte.
+    margin-right: 1.25rem;
+  }
+
+  &__photo,
+  &__thumb {
+    flex: none;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-sm);
+  }
+
+  &__photo {
+    // `cover` come nelle schede del catalogo: qui conta che le miniature
+    // siano tutte della stessa forma, non vedere il prodotto per intero.
+    object-fit: cover;
+    background: var(--surface-sunken);
+  }
+
+  &__thumb {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.92);
+  }
+
   // Cestino al posto della scritta "Rimuovi". La descrizione non sparisce:
   // è nel `title`, che il browser mostra passandoci sopra, e nell'
   // `aria-label` per chi l'icona non la vede.

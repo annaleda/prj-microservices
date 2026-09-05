@@ -1286,6 +1286,75 @@ tutto questo.
 scorrere la pagina in orizzontale. E' un difetto preesistente e
 indipendente da questa correzione.
 
+### 26. Giro di rifiniture su carrello, catalogo e console admin
+
+Serie di richieste puntuali dell'utente, tutte verificate con screenshot
+pilotando Chrome via CDP (script in `scratchpad`, non versionato): con
+`ws` gia' presente fra le dipendenze bastano poche righe per aprire una
+pagina, riempire il carrello in localStorage o passare dal **login vero
+di Keycloak**, e fotografare il risultato. Molto piu' utile del semplice
+"compila" per modifiche che sono solo visive.
+
+**Icone al posto delle scritte.** "Rimuovi" nel checkout e
+"Modifica"/"Elimina"/"+ Nuovo prodotto" in Admin Web sono diventati
+pulsanti di sola icona; nel catalogo "Aggiungi al carrello" e' diventato
+il carrello dell'intestazione, cosi' il gesto e la sua destinazione si
+riconoscono come la stessa cosa. Icone disegnate a mano anche in React
+(`components/icons.tsx`), come gia' in Angular: poche icone non
+giustificano una libreria.
+
+Il punto delicato: **un pulsante di sola icona senza nome accessibile e'
+muto**. Ognuno ha `title` (la descrizione che compare passandoci sopra,
+che e' cio' che l'utente aveva chiesto) e `aria-label`, che nomina anche
+il prodotto — chi non vede l'icona deve sapere *quale* riga sta
+togliendo. C'e' un test che lo verifica, perche' e' esattamente il tipo
+di attributo che sparisce al primo riordino del template.
+
+*Correzione su indicazione dell'utente*: li avevo fatti spenti, con il
+colore solo al passaggio del mouse, per non avere una colonna di cestini
+rossi piu' rumorosa dei dati. L'utente li voleva evidenti sempre —
+cestino rosso e carrello pieno di colore fin da subito. Fatto, e i
+commenti nel codice aggiornati: lasciare la motivazione opposta accanto
+al codice sarebbe stato peggio del codice stesso.
+
+**Intestazione di Admin Web**: nome utente e "Esci" erano appiccicati al
+titolo perche' `.app-header` non aveva alcun layout. Aggiunto un flex
+con `space-between`.
+
+**Ordini annullati fuori dallo storico.** Su richiesta dell'utente il
+cliente non li vede piu' in "I miei ordini": un acquisto non andato a
+buon fine non e' un ordine da ricordare, e in elenco fa sembrare
+comprato qualcosa che non lo e'. Il filtro sta nel **frontend** e non
+nell'API, a differenza di quello sulla proprieta' degli ordini (sezione
+20): li' era una regola sui dati, qui e' una preferenza di
+presentazione, e l'API la usa anche il personale interno, che gli ordini
+annullati deve continuare a vederli.
+
+Conseguenza da tenere presente: l'etichetta breve del motivo, aggiunta
+allo storico nella sezione 22, e' diventata irraggiungibile ed e' stata
+tolta. Il motivo resta dov'e' utile — al checkout, per esteso, nel
+momento in cui il cliente puo' farci qualcosa — e resta nell'API e nel
+modello.
+
+**Checkout con le immagini.** `CartItem` ha ora `imageUrl`, copiato dal
+prodotto al momento dell'aggiunta: il carrello si disegna senza
+richiedere di nuovo il catalogo. Il campo e' **opzionale** perche' i
+carrelli gia' salvati in localStorage non ce l'hanno, e per quelli si
+ricade sulla banda colorata — caso verificato apposta con uno
+screenshot, insieme a quello dell'immagine caricata su MinIO e di quella
+esterna. Al momento di creare l'ordine gli item vengono rimappati sui
+soli campi che l'API conosce: l'immagine serve a disegnare il carrello,
+non fa parte dell'ordine.
+
+Il prodotto nel carrello e' inoltre un **riquadro cliccabile** che porta
+alla sua scheda: dal checkout si vuole spesso ricontrollare cosa si sta
+comprando, e prima l'unica strada era tornare al catalogo e ricercarlo.
+
+Test frontend da 11 a 15: i tre nuovi su `OrdersComponent` (annullati
+esclusi, storico vuoto se ci sono solo quelli, e ordini ancora in
+lavorazione che devono restare visibili) piu' quello sul nome
+accessibile del cestino.
+
 ### In sospeso: Admin Web
 
 Annotazione dell'utente (5 settembre 2026): **la parte admin e' messa

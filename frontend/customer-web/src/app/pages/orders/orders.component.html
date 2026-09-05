@@ -39,9 +39,6 @@
             <span class="orders__status" [ngClass]="'orders__status--' + order.status.toLowerCase()">
               {{ statusLabel(order.status) }}
             </span>
-            <span *ngIf="cancellationLabel(order)" class="orders__reason">
-              {{ cancellationLabel(order) }}
-            </span>
           </td>
         </tr>
       </tbody>
