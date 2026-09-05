@@ -68,6 +68,20 @@ public class Order {
     @Builder.Default
     private List<OrderItem> items = new ArrayList<>();
 
+    /**
+     * Perche' l'ordine e' stato annullato, come codice deciso dalla saga
+     * (INVENTORY_REJECTED, PAYMENT_FAILED, SAGA_STATE_LOST).
+     *
+     * Un codice e non il testo dell'evento: e' quello che il checkout usa
+     * per dire al cliente cosa e' andato storto, e un messaggio riformulato
+     * non deve poter cambiare il comportamento del frontend.
+     *
+     * Nullo su ogni ordine non annullato, e su quelli annullati prima che
+     * questa colonna esistesse.
+     */
+    @Column(name = "cancellation_reason")
+    private String cancellationReason;
+
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
 

@@ -45,8 +45,14 @@ public class SagaOutcomeListener {
     public void onOrderCancelled(String message) throws Exception {
         JsonNode data = objectMapper.readTree(message).path("data");
         Long orderId = data.path("orderId").asLong();
+        // Il codice e' il contratto, il testo e' per i log. Un evento
+        // pubblicato prima che il codice esistesse non ne ha: l'ordine
+        // resta annullato senza motivo registrato, che e' meglio di
+        // inventarne uno.
+        String reasonCode = data.path("reasonCode").asText(null);
 
-        log.info("Saga outcome: order {} cancelled (reason={})", orderId, data.path("reason").asText(""));
-        orderService.applyStatusFromSaga(orderId, OrderStatus.CANCELLED);
+        log.info("Saga outcome: order {} cancelled (reasonCode={}, reason={})",
+                orderId, reasonCode, data.path("reason").asText(""));
+        orderService.applyStatusFromSaga(orderId, OrderStatus.CANCELLED, reasonCode);
     }
 }

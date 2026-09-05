@@ -992,6 +992,116 @@ entrambi i frontend, e screenshot del catalogo per controllare che le
 foto si vedano davvero e riempiano la scheda senza deformarsi
 (`object-fit: cover`).
 
+### 22. Ogni ordine finiva annullato (bug reale) e le tre correzioni
+
+Segnalazione dell'utente a inizio sessione: "se provo ad aggiungere un
+articolo al carrello e a concludere l'ordine mi da status cancelled".
+
+**Causa.** Il magazzino aveva scorte solo per i product id 1, 2 e 3 --
+il seed scritto nella sezione 7, quando il catalogo aveva tre prodotti
+di prova. I 9 prodotti dimostrativi aggiunti nella sezione 21 hanno id
+4..12 e **nessuna riga a magazzino**: l'Inventory Service sollevava
+`UnknownProduct`, pubblicava `inventory.rejected` e la saga annullava
+l'ordine. Tutti e sei gli ordini annullati nel database erano sui
+prodotti 4, 7 e 10.
+
+Sembrava non funzionare nemmeno con il laptop perche' il catalogo ne
+aveva **due**: `SKU-LAPTOP-01` (id 1, residuo del primissimo seed,
+l'unico con scorte) e `SKU-LAPTOP-14` (id 4, quello di `data.sql`, cioe'
+quello che si vede in vetrina).
+
+Terza istanza della lezione delle sezioni 16 e 20: una scelta corretta
+quando viene presa (una mappa di scorte per i tre prodotti che
+esistevano) diventa un difetto per via di qualcosa aggiunto dopo, senza
+che nessuno tocchi il codice in questione.
+
+**Sbloccato subito** allineando le scorte al catalogo reale, poi -- su
+richiesta di fare tutto -- affrontate le tre cose che il bug aveva reso
+visibili.
+
+**1. `product.created`: il magazzino non deve piu' essere avvisato a
+mano.** Nuovo topic, con il Catalog Service che pubblica alla creazione
+di un prodotto (stesso schema dell'Order Service: evento applicativo
+Spring inoltrato a Kafka in `AFTER_COMMIT`, mai dentro la transazione) e
+l'Inventory Service che consuma e apre la riga di magazzino. La riga
+nasce **a zero disponibili**: un prodotto appena messo a catalogo non ha
+pezzi finche' non arrivano davvero. Crearla comunque subito e' cio' che
+distingue "prodotto senza scorte" -- rifiuto legittimo, con un motivo
+comprensibile -- da "prodotto che il magazzino non conosce affatto".
+
+Un'osservazione emersa scrivendo il fix: **i prodotti di `data.sql` non
+passano dal servizio**, quindi non generano l'evento. La prima versione
+della correzione ricopiava percio' gli id 4..12 nel seed dell'Inventory
+Service -- ma quella mappa sarebbe stata **sbagliata su un database
+creato da zero**, dove gli id verrebbero diversi. Scritto invece uno
+script (`infrastructure/demo/seed-stock.sh`) che **legge il catalogo
+dalle sue API** e dichiara le scorte con il nuovo `PUT
+/api/inventory/{id}`: non conosce gli id, li chiede. Nel servizio non
+resta alcuna copia a mano di dati che vivono in un altro database.
+
+Il `PUT` e' servito anche perche' senza non c'era **alcun modo** di
+rifornire un prodotto: la saga sa solo riservare e rilasciare. Dichiara
+il totale disponibile (non una variazione, cosi' una richiesta ripetuta
+non raddoppia le scorte) e lascia intatte le unita' gia' riservate da
+ordini in corso.
+
+**2. Il checkout ora dice perche'.** `order.cancelled` portava gia' un
+`reason` in testo libero, che l'Order Service loggava e buttava via.
+Aggiunto accanto un `reasonCode` (`INVENTORY_REJECTED`,
+`PAYMENT_FAILED`, `SAGA_STATE_LOST`), registrato su
+`orders.cancellation_reason` ed esposto nella risposta. Il codice e' il
+contratto, il testo resta per i log: far dipendere il frontend dal testo
+significherebbe romperlo il giorno in cui si riformula un messaggio.
+Scorte esaurite e pagamento rifiutato hanno rimedi opposti -- togliere
+un articolo, oppure riprovare a pagare -- e il generico "ordine
+annullato" non permetteva di distinguerli. Nello storico ordini compare
+l'etichetta breve, al checkout la spiegazione estesa.
+
+**3. Doppione del laptop eliminato** (`SKU-LAPTOP-01`), via API di
+amministrazione. Il catalogo ha ora 9 prodotti, uno per SKU.
+
+**Verifica end-to-end**, con i cinque servizi ricompilati e riavviati
+contro i database e il Kafka reali:
+
+| prova | esito |
+|---|---|
+| creo un prodotto nuovo (id 13) | riga di magazzino creata da sola, 0 pezzi |
+| lo ordino cosi' com'e' | CANCELLED, `INVENTORY_REJECTED` |
+| lo rifornisco (PUT, 20 pezzi) e riordino | CONFIRMED, scorte 20 -> 18 |
+| ordine da 11.999 (sopra la soglia di 10.000) | CANCELLED, `PAYMENT_FAILED`, scorte riservate e **rilasciate** |
+| `seed-stock.sh 50` | 10 prodotti riforniti, tutti 200 |
+
+`saga.dlq` resta a 0.
+
+**Test**: Catalog 6/6 (nuovo: l'evento sul topic, con Kafka via
+Testcontainers -- il primo del servizio ad averne bisogno), Order 15/15
+(due nuovi: il motivo registrato, e un evento *senza* `reasonCode` che
+deve comunque annullare l'ordine senza inventarne uno), Inventory 18/18
+(nascita della riga, non-azzeramento su ri-consegna, endpoint scorte e
+sue autorizzazioni), Integration 5/5 (asserito il `reasonCode`), Payment
+9/9 invariato, frontend 11/11 (quattro nuovi test di componente sul
+checkout: un messaggio diverso per ogni motivo, quello generico quando
+il motivo manca, e il carrello che resta pieno dopo un rifiuto).
+
+**Kubernetes**: aggiunto `KAFKA_BOOTSTRAP_SERVERS` al ConfigMap del
+catalog-service, che da ora produce eventi, con la solita patch
+`host.docker.internal:9094` nell'overlay `local`. Come sempre solo
+`kubectl kustomize` + `--dry-run=client`.
+
+**Intoppi di percorso.** Il `package` Maven falliva con "Unable to
+rename ... jar.original": il jar era **bloccato dal processo in
+esecuzione**, i servizi vanno fermati prima di ricompilare. Un `cd X &&
+nohup ... &` mette anche il `cd` nella subshell, quindi i comandi
+successivi partono dalla cartella sbagliata: i riavvii vanno fatti con
+percorsi assoluti. E `docker exec` da Git Bash converte i percorsi Unix
+in percorsi Windows (`/opt/kafka/...` diventava `C:/Program
+Files/Git/opt/kafka/...`): serve `MSYS_NO_PATHCONV=1`.
+
+**Prossimo passo naturale**: Admin Web, che resta il pezzo indietro
+(vedi la nota in fondo) -- e che ora avrebbe anche di che occuparsi,
+visto che le scorte hanno un endpoint per essere gestite e nessuna
+interfaccia che lo usi.
+
 ### In sospeso: Admin Web
 
 Annotazione dell'utente (5 settembre 2026): **la parte admin e' messa

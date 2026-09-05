@@ -80,6 +80,13 @@ patches:
   # come nel base.
   - target:
       kind: ConfigMap
+      name: catalog-service-config
+    patch: |-
+      - op: replace
+        path: /data/KAFKA_BOOTSTRAP_SERVERS
+        value: host.docker.internal:9094
+  - target:
+      kind: ConfigMap
       name: order-service-config
     patch: |-
       - op: replace

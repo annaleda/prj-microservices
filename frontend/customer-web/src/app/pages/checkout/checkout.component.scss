@@ -98,6 +98,13 @@
   &__error {
     background: var(--danger-soft);
     color: var(--danger);
+
+    // Il riquadro di annullamento ora contiene piu' righe (il titolo, il
+    // motivo, la sorte del carrello): senza questo i margini di default dei
+    // paragrafi lo sformerebbero.
+    p {
+      margin: 0.45rem 0 0;
+    }
   }
 
   &__quantity {

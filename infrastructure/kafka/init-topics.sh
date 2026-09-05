@@ -9,6 +9,7 @@ set -e
 BOOTSTRAP="kafka:9092"
 
 TOPICS="
+product.created
 order.created
 order.updated
 order.cancelled

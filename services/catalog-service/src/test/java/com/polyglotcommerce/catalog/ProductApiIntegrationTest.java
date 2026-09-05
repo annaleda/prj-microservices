@@ -15,11 +15,16 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
+
+import com.fasterxml.jackson.databind.JsonNode;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -39,11 +44,18 @@ class ProductApiIntegrationTest {
             .withUsername("catalog")
             .withPassword("catalog");
 
+    // Broker vero e non mock: creare un prodotto pubblica product.created, e
+    // il valore del test sta proprio nel verificare cio' che finisce sul
+    // topic, che e' il contratto con l'Inventory Service.
+    @Container
+    static KafkaContainer kafka = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.4.0"));
+
     @DynamicPropertySource
     static void datasourceProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
+        registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
     }
 
     @Autowired
@@ -112,6 +124,28 @@ class ProductApiIntegrationTest {
         ResponseEntity<ProductResponse> deletedResponse =
                 restTemplate.getForEntity("/api/products/" + productId, ProductResponse.class);
         assertThat(deletedResponse.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void creatingAProductAnnouncesItOnKafka() {
+        // Senza questo evento l'Inventory Service non sa che il prodotto
+        // esiste, e ogni ordine che lo contiene viene rifiutato e annullato
+        // dalla saga: e' il bug del 5 settembre 2026.
+        ProductRequest request = new ProductRequest("Docking Station", "USB-C dock",
+                new BigDecimal("119.00"), "SKU-DOCK-01", null, ensureCategory());
+
+        ResponseEntity<ProductResponse> created = restTemplate.exchange(
+                "/api/products", HttpMethod.POST, as(ADMIN, request), ProductResponse.class);
+        assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+
+        Long productId = created.getBody().getId();
+        JsonNode envelope = KafkaTestSupport.awaitProductEvent(
+                kafka.getBootstrapServers(), "product.created", productId, Duration.ofSeconds(20));
+
+        assertThat(envelope.path("eventType").asText()).isEqualTo("PRODUCT_CREATED");
+        assertThat(envelope.path("source").asText()).isEqualTo("catalog-service");
+        assertThat(envelope.path("data").path("sku").asText()).isEqualTo("SKU-DOCK-01");
+        assertThat(envelope.path("data").path("name").asText()).isEqualTo("Docking Station");
     }
 
     @Test

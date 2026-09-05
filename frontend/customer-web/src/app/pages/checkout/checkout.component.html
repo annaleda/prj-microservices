@@ -97,10 +97,11 @@
     <p *ngIf="order.status === 'CONFIRMED'" class="checkout__success">
       Ordine confermato: scorte riservate e pagamento riuscito.
     </p>
-    <p *ngIf="order.status === 'CANCELLED'" class="checkout__error">
-      Ordine annullato: scorte non disponibili oppure pagamento rifiutato.
-      Il carrello è rimasto invariato.
-    </p>
+    <div *ngIf="order.status === 'CANCELLED'" class="checkout__error">
+      <strong>Ordine annullato.</strong>
+      <p>{{ cancellationMessage }}</p>
+      <p>Il carrello è rimasto invariato, così puoi correggerlo e riprovare.</p>
+    </div>
 
     <div class="checkout__actions" *ngIf="!awaitingOutcome">
       <a routerLink="/orders">I miei ordini</a>

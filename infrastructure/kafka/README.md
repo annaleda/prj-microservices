@@ -24,6 +24,7 @@ Corrispondono all'event catalog del documento di design (sezione 8),
 piu' il topic tecnico `saga.dlq` (vedi in fondo):
 
 ```
+product.created
 order.created
 order.updated
 order.cancelled
@@ -43,6 +44,7 @@ saga.dlq
 
 | Topic | Producer | Consumer |
 |---|---|---|
+| `product.created` | Catalog Service | Inventory Service |
 | `order.created` | Order Service | Inventory Service, Integration Service |
 | `inventory.reserved` / `inventory.rejected` | Inventory Service | Integration Service |
 | `payment.requested` | Integration Service | Payment Service |
@@ -50,6 +52,13 @@ saga.dlq
 | `order.updated` / `order.cancelled` | Integration Service | Order Service, Inventory Service (compensazione) |
 | `inventory.released` | Inventory Service | — (per ora nessuno) |
 | `saga.dlq` | tutti i consumer | — (ispezione manuale) |
+
+`product.created` non fa parte della saga: e' l'annuncio che un
+prodotto nuovo esiste, e serve all'Inventory Service per aprirne la
+riga di magazzino (a zero disponibili). Senza, un prodotto appena
+messo a catalogo risulterebbe sconosciuto al magazzino e ogni ordine
+che lo contiene verrebbe rifiutato — con l'ordine annullato dalla saga
+e nessun modo evidente di capire perche'.
 
 L'orchestrazione e' descritta nella sezione "Saga Orchestration" del
 documento di design; per provarla in locale vedi la sezione 3 del

@@ -71,6 +71,9 @@ class OrderSagaRoutesTest {
                 kafka.getBootstrapServers(), "order.cancelled", orderId, Duration.ofSeconds(30));
 
         assertThat(envelope.path("eventType").asText()).isEqualTo("ORDER_CANCELLED");
+        // Il codice e' cio' su cui il frontend decide il messaggio; il testo
+        // resta per i log, e cambiarlo non deve rompere nulla.
+        assertThat(envelope.path("data").path("reasonCode").asText()).isEqualTo("INVENTORY_REJECTED");
         assertThat(envelope.path("data").path("reason").asText()).contains("Insufficient stock");
     }
 
@@ -99,6 +102,7 @@ class OrderSagaRoutesTest {
         JsonNode envelope = KafkaTestSupport.awaitEvent(
                 kafka.getBootstrapServers(), "order.cancelled", orderId, Duration.ofSeconds(30));
 
+        assertThat(envelope.path("data").path("reasonCode").asText()).isEqualTo("PAYMENT_FAILED");
         assertThat(envelope.path("data").path("reason").asText()).contains("Declined by payment gateway");
     }
 
@@ -114,6 +118,7 @@ class OrderSagaRoutesTest {
         JsonNode envelope = KafkaTestSupport.awaitEvent(
                 kafka.getBootstrapServers(), "order.cancelled", orderId, Duration.ofSeconds(30));
 
+        assertThat(envelope.path("data").path("reasonCode").asText()).isEqualTo("SAGA_STATE_LOST");
         assertThat(envelope.path("data").path("reason").asText()).contains("Saga state lost");
     }
 

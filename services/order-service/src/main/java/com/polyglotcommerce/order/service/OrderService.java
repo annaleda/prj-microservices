@@ -127,6 +127,17 @@ public class OrderService {
      */
     @Transactional
     public void applyStatusFromSaga(Long orderId, OrderStatus newStatus) {
+        applyStatusFromSaga(orderId, newStatus, null);
+    }
+
+    /**
+     * Variante con il motivo dell'esito, valorizzato dalla saga solo quando
+     * l'ordine viene annullato: e' cio' che permette al checkout di dire al
+     * cliente se il problema erano le scorte o il pagamento, invece del
+     * generico "annullato" che non lascia capire nulla.
+     */
+    @Transactional
+    public void applyStatusFromSaga(Long orderId, OrderStatus newStatus, String reasonCode) {
         Order order = orderRepository.findById(orderId).orElse(null);
         if (order == null) {
             log.warn("Saga outcome for unknown order {}: ignored", orderId);
@@ -141,6 +152,9 @@ public class OrderService {
         }
 
         order.setStatus(newStatus);
+        if (newStatus == OrderStatus.CANCELLED) {
+            order.setCancellationReason(reasonCode);
+        }
         orderRepository.save(order);
     }
 

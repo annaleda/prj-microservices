@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
-import { OrderResponse, OrderStatus } from '../../models/order.model';
+import { cancellationLabel as labelForReason, OrderResponse, OrderStatus } from '../../models/order.model';
 import { AuthService } from '../../services/auth.service';
 import { OrderService } from '../../services/order.service';
 
@@ -51,6 +51,11 @@ export class OrdersComponent implements OnInit {
       default:
         return 'In lavorazione';
     }
+  }
+
+  /** Etichetta breve sotto lo stato degli ordini annullati. */
+  cancellationLabel(order: OrderResponse): string {
+    return labelForReason(order.cancellationReason);
   }
 
   itemCount(order: OrderResponse): number {

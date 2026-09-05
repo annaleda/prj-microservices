@@ -189,6 +189,41 @@ class OrderApiIntegrationTest {
                 .isEqualTo(OrderStatus.CANCELLED);
     }
 
+    @Test
+    void cancellationReasonFromTheSagaIsStoredAndReturned() {
+        // Senza il motivo, il checkout puo' dire solo "annullato": scorte
+        // esaurite e pagamento rifiutato sono cause diverse, con rimedi
+        // diversi, e il cliente non ha modo di distinguerle.
+        OrderResponse created = createOrderAs(CUSTOMER);
+
+        KafkaTestSupport.send(kafka.getBootstrapServers(), "order.cancelled", String.valueOf(created.getId()),
+                KafkaTestSupport.envelope("ORDER_CANCELLED", "test-correlation",
+                        "{\"orderId\":" + created.getId()
+                                + ",\"reasonCode\":\"INVENTORY_REJECTED\""
+                                + ",\"reason\":\"Inventory rejected: no stock for product 10\"}"));
+
+        await(() -> readOrder(created.getId()).getStatus() == OrderStatus.CANCELLED);
+
+        assertThat(readOrder(created.getId()).getCancellationReason())
+                .isEqualTo("INVENTORY_REJECTED");
+    }
+
+    @Test
+    void aCancelledOrderWithoutReasonCodeIsStillCancelled() {
+        // Gli eventi pubblicati prima che il codice esistesse non lo hanno:
+        // l'ordine deve comunque risultare annullato, senza motivo
+        // registrato invece che con uno inventato.
+        OrderResponse created = createOrderAs(CUSTOMER);
+
+        KafkaTestSupport.send(kafka.getBootstrapServers(), "order.cancelled", String.valueOf(created.getId()),
+                KafkaTestSupport.envelope("ORDER_CANCELLED", "test-correlation",
+                        "{\"orderId\":" + created.getId() + ",\"reason\":\"Payment failed\"}"));
+
+        await(() -> readOrder(created.getId()).getStatus() == OrderStatus.CANCELLED);
+
+        assertThat(readOrder(created.getId()).getCancellationReason()).isNull();
+    }
+
     /** Rilegge un ordine come il cliente che lo ha creato. */
     private OrderResponse readOrder(Long id) {
         return restTemplate.exchange("/api/orders/" + id, HttpMethod.GET, as(CUSTOMER), OrderResponse.class)

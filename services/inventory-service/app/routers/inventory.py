@@ -3,7 +3,12 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import InventoryItem, Reservation
-from app.schemas.inventory import InventoryResponse, ReservationRequest, ReservationResponse
+from app.schemas.inventory import (
+    InventoryResponse,
+    ReservationRequest,
+    ReservationResponse,
+    StockUpdateRequest,
+)
 from app.security import Principal, current_principal, require_roles
 from app.services import inventory as inventory_service
 
@@ -24,6 +29,23 @@ def get_inventory(
         return inventory_service.get_item(db, product_id)
     except inventory_service.UnknownProduct as error:
         raise HTTPException(status_code=404, detail=str(error))
+
+
+@router.put("/{product_id}", response_model=InventoryResponse)
+def set_stock(
+    product_id: int,
+    request: StockUpdateRequest,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(warehouse_only),
+) -> InventoryItem:
+    """Dichiara le scorte disponibili di un prodotto.
+
+    E' l'unico modo per rifornire un prodotto: la saga sa solo riservare e
+    rilasciare, e un prodotto appena creato nasce a zero disponibili. Senza
+    questo endpoint le scorte si potrebbero cambiare solo scrivendo
+    direttamente nel database.
+    """
+    return inventory_service.set_available(db, product_id, request.quantity_available)
 
 
 @router.post("/reservations", response_model=ReservationResponse, status_code=status.HTTP_201_CREATED)

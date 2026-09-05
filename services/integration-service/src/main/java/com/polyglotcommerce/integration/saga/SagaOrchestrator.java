@@ -41,6 +41,19 @@ public class SagaOrchestrator {
      */
     private static final String DEFAULT_PAYMENT_METHOD = "CARD";
 
+    /**
+     * Codici del motivo di annullamento, in aggiunta al testo libero.
+     *
+     * Il testo ("Insufficient stock for product 10...") serve a chi legge i
+     * log; il codice serve a chi deve decidere qualcosa, ad esempio il
+     * checkout che vuole dire al cliente se il problema erano le scorte o il
+     * pagamento. Far dipendere quella scelta dal testo significherebbe
+     * spezzare il frontend il giorno in cui si riformula un messaggio.
+     */
+    private static final String REASON_INVENTORY_REJECTED = "INVENTORY_REJECTED";
+    private static final String REASON_PAYMENT_FAILED = "PAYMENT_FAILED";
+    private static final String REASON_SAGA_STATE_LOST = "SAGA_STATE_LOST";
+
     private final SagaStateStore stateStore;
     private final ObjectMapper objectMapper;
 
@@ -80,7 +93,8 @@ public class SagaOrchestrator {
             // l'ordine, il che fa anche rilasciare le scorte appena
             // riservate, invece di lasciare ordine e scorte bloccati.
             log.warn("No saga state for order {}: cancelling instead of requesting payment", orderId);
-            return orderCancelled(orderId, correlationId, "Saga state lost (orchestrator restarted)");
+            return orderCancelled(orderId, correlationId, REASON_SAGA_STATE_LOST,
+                    "Saga state lost (orchestrator restarted)");
         }
 
         Map<String, Object> payload = new HashMap<>();
@@ -102,7 +116,7 @@ public class SagaOrchestrator {
         stateStore.complete(orderId);
         log.info("Order {}: stock rejected, cancelling order", orderId);
         return orderCancelled(orderId, envelope.path("correlationId").asText(null),
-                "Inventory rejected: " + data.path("reason").asText(""));
+                REASON_INVENTORY_REJECTED, "Inventory rejected: " + data.path("reason").asText(""));
     }
 
     /** Passo 3 (successo): la saga si chiude confermando l'ordine. */
@@ -137,12 +151,13 @@ public class SagaOrchestrator {
         stateStore.complete(orderId);
         log.info("Order {}: payment failed, cancelling order and releasing stock", orderId);
         return orderCancelled(orderId, envelope.path("correlationId").asText(null),
-                "Payment failed: " + data.path("reason").asText(""));
+                REASON_PAYMENT_FAILED, "Payment failed: " + data.path("reason").asText(""));
     }
 
-    private NextEvent orderCancelled(Long orderId, String correlationId, String reason) {
+    private NextEvent orderCancelled(Long orderId, String correlationId, String reasonCode, String reason) {
         Map<String, Object> payload = new HashMap<>();
         payload.put("orderId", orderId);
+        payload.put("reasonCode", reasonCode);
         payload.put("reason", reason);
 
         return next(EventTopics.ORDER_CANCELLED, orderId,

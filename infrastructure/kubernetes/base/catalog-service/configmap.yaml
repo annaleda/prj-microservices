@@ -7,4 +7,7 @@ data:
   CATALOG_DB_HOST: catalog-db
   CATALOG_DB_PORT: "5432"
   CATALOG_DB_NAME: catalog
+  # Il catalogo pubblica product.created, consumato dall'Inventory
+  # Service per creare la riga di magazzino del prodotto nuovo.
+  KAFKA_BOOTSTRAP_SERVERS: kafka:9092
   KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/polyglot-commerce

@@ -11,6 +11,18 @@ class InventoryResponse(BaseModel):
     quantity_reserved: int = Field(alias="quantityReserved")
 
 
+class StockUpdateRequest(BaseModel):
+    """Quante unita' il magazzino dichiara disponibili.
+
+    Si dichiara il totale, non una variazione: e' cio' che fa chi conta
+    quello che ha su uno scaffale, ed evita che due richieste ripetute per
+    un errore di rete raddoppino le scorte.
+    """
+    model_config = ConfigDict(populate_by_name=True)
+
+    quantity_available: int = Field(alias="quantityAvailable", ge=0)
+
+
 class ReservationRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 

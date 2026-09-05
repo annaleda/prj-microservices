@@ -32,13 +32,18 @@ evento, solo REST + database); per il flusso a eventi vedi la
 Dalla root del progetto:
 
 ```bash
-docker compose up -d catalog-db
+docker compose up -d catalog-db kafka kafka-init
 docker compose ps
 ```
 
-`catalog-db` deve risultare `healthy`. Le credenziali/porte sono in
-[.env](.env) (`localhost:5434`, db `catalog`, utente/password
-`catalog`/`catalog`).
+`catalog-db` e `kafka` devono risultare `healthy`. Le credenziali e le
+porte sono in [.env](.env) (`localhost:5434`, db `catalog`,
+utente/password `catalog`/`catalog`).
+
+Kafka serve anche solo per il catalogo: alla creazione di un prodotto
+il servizio pubblica `product.created`. Senza broker raggiungibile la
+lettura del catalogo funziona lo stesso, ma la creazione di un
+prodotto resta in attesa finche' il producer non rinuncia.
 
 > Per avviare **tutti** i database del progetto (utile se in futuro si
 > lavora anche su altri servizi) basta omettere il nome del servizio:
@@ -204,14 +209,20 @@ Dalla radice del repository:
 docker compose up -d          # database + Kafka + kafka-ui
 ```
 
-Poi, in quattro terminali distinti:
+Poi, in cinque terminali distinti:
 
 ```bash
+cd services/catalog-service     && mvn -s .mvn/settings.xml spring-boot:run   # 8081
 cd services/order-service       && mvn -s .mvn/settings.xml spring-boot:run   # 8082
 cd services/inventory-service   && uvicorn app.main:app --port 8083           # 8083
 cd services/payment-service     && mvn -s .mvn/settings.xml spring-boot:run   # 8084
 cd services/integration-service && mvn -s .mvn/settings.xml spring-boot:run   # 8085
 ```
+
+> L'Inventory Service richiede le dipendenze Python installate
+> (`pip install -r requirements.txt`, preferibilmente in un
+> virtualenv). Il suo consumer Kafka si puo' spegnere con
+> `EVENTS_ENABLED=false` per usarlo come sola API REST.
 
 Gli esempi che seguono usano i token della sezione 3.2:
 
@@ -223,46 +234,80 @@ CUSTOMER=$(get_token customer customer-web)
 AUTH="Authorization: Bearer $CUSTOMER"
 ```
 
-> L'Inventory Service richiede le dipendenze Python installate
-> (`pip install -r requirements.txt`, preferibilmente in un
-> virtualenv). Il suo consumer Kafka si puo' spegnere con
-> `EVENTS_ENABLED=false` per usarlo come sola API REST.
+### 4.2 Rifornire il magazzino
 
-### 4.2 Percorso felice: ordine confermato
+**Passo necessario, non facoltativo.** Un prodotto senza scorte fa
+rifiutare la riserva e la saga annulla l'ordine: senza questo passo
+ogni acquisto finisce `CANCELLED`.
 
 ```bash
-curl -s -H "$AUTH" http://localhost:8083/api/inventory/1     # scorte prima
+sh infrastructure/demo/seed-stock.sh 50    # 50 pezzi per ogni prodotto a catalogo
+```
+
+Lo script legge gli identificativi da `GET /api/products` e dichiara
+le scorte con `PUT /api/inventory/{id}`, usando il token dell'utente
+`warehouse`. Legge il catalogo invece di conoscerlo: una lista di id
+scritta a mano si disallinea appena il catalogo cambia.
+
+Un prodotto creato dopo (da Admin Web o via API) ottiene subito la sua
+riga di magazzino — il Catalog Service pubblica `product.created` e
+l'Inventory Service la crea — ma **a zero pezzi**: le unita' vanno
+dichiarate, con lo script oppure a mano:
+
+```bash
+WAREHOUSE=$(get_token warehouse admin-web)
+curl -s -X PUT http://localhost:8083/api/inventory/13   -H "Authorization: Bearer $WAREHOUSE" -H "Content-Type: application/json"   -d '{"quantityAvailable": 20}'
+```
+
+### 4.3 Percorso felice: ordine confermato
+
+Gli esempi usano un prodotto vero del catalogo:
+
+```bash
+# id e prezzo di un prodotto a catalogo
+curl -s http://localhost:8081/api/products | python -c "import sys,json;p=json.load(sys.stdin)[0];print(p['id'],p['name'],p['price'])"
+```
+
+```bash
+PID=5   # sostituire con l'id ottenuto sopra
+curl -s -H "$AUTH" http://localhost:8083/api/inventory/$PID   # scorte prima
 
 # Nessuna email nella richiesta: l'ordine e' intestato a chi ha il token.
-curl -s -X POST http://localhost:8082/api/orders -H "$AUTH"   -H "Content-Type: application/json"   -d '{"items":[{"productId":1,"productName":"Wireless Mouse","quantity":2,"unitPrice":29.90}]}'
+curl -s -X POST http://localhost:8082/api/orders -H "$AUTH"   -H "Content-Type: application/json"   -d "{\"items\":[{\"productId\":$PID,\"productName\":\"Mouse wireless\",\"quantity\":2,\"unitPrice\":29.90}]}"
 
 # dopo un paio di secondi (l'id e' quello restituito sopra)
 curl -s -H "$AUTH" http://localhost:8082/api/orders/1        # status: CONFIRMED
-curl -s -H "$AUTH" http://localhost:8083/api/inventory/1     # 2 pezzi riservati
+curl -s -H "$AUTH" http://localhost:8083/api/inventory/$PID  # 2 pezzi riservati
 ```
 
-### 4.3 Pagamento rifiutato: compensazione
+### 4.4 Pagamento rifiutato: compensazione
 
 Il gateway di pagamento simulato rifiuta gli importi da 10.000 in su.
 L'ordine viene annullato **e le scorte riservate tornano disponibili**:
 
 ```bash
-curl -s -X POST http://localhost:8082/api/orders -H "$AUTH"   -H "Content-Type: application/json"   -d '{"items":[{"productId":2,"productName":"Mechanical Keyboard","quantity":40,"unitPrice":250.00}]}'
-
-# status: CANCELLED, e le scorte del prodotto 2 sono di nuovo quelle di partenza
-curl -s -H "$AUTH" http://localhost:8083/api/inventory/2
+curl -s -X POST http://localhost:8082/api/orders -H "$AUTH"   -H "Content-Type: application/json"   -d '{"items":[{"productId":4,"productName":"Laptop 14\"","quantity":12,"unitPrice":999.99}]}'
 ```
 
-### 4.4 Scorte insufficienti: saga interrotta subito
+L'ordine risulta `CANCELLED` con `cancellationReason: PAYMENT_FAILED`,
+e le scorte del laptop tornano quelle di partenza.
+
+### 4.5 Scorte insufficienti: saga interrotta subito
 
 ```bash
-curl -s -X POST http://localhost:8082/api/orders -H "$AUTH"   -H "Content-Type: application/json"   -d '{"items":[{"productId":3,"productName":"Rare Book","quantity":9999,"unitPrice":10.00}]}'
+curl -s -X POST http://localhost:8082/api/orders -H "$AUTH"   -H "Content-Type: application/json"   -d '{"items":[{"productId":9,"productName":"Il nome della rosa","quantity":9999,"unitPrice":13.50}]}'
 ```
 
-L'ordine risulta `CANCELLED` senza che venga creato alcun pagamento:
-la saga si ferma al rifiuto delle scorte.
+L'ordine risulta `CANCELLED` con `cancellationReason:
+INVENTORY_REJECTED` e senza che venga creato alcun pagamento: la saga
+si ferma al rifiuto delle scorte.
 
-### 4.5 Vedere gli eventi
+Il motivo dell'annullamento e' il campo su cui il checkout sceglie
+cosa dire al cliente — "riduci le quantita'" oppure "riprova il
+pagamento" — due rimedi opposti che il generico "ordine annullato" non
+permetteva di distinguere.
+
+### 4.6 Vedere gli eventi
 
 Su `http://localhost:8090` (kafka-ui) si possono ispezionare i topic
 uno per uno e leggere gli envelope JSON. Tutti gli eventi di una
@@ -271,7 +316,7 @@ ricostruibile da un capo all'altro. Il topic `saga.dlq` deve restare
 vuoto: se contiene qualcosa, un consumer non e' riuscito a processare
 un messaggio nemmeno dopo i tentativi previsti.
 
-### 4.6 Dal browser
+### 4.7 Dal browser
 
 Con Customer Web (`npm start` in `frontend/customer-web`, vedi 1.4): si
 accede con l'utente `customer`, si aggiunge qualcosa al carrello e il
@@ -385,6 +430,10 @@ kind delete cluster --name polyglot-commerce
 ---
 
 ## Struttura del repository
+
+`infrastructure/demo/` contiene gli script che preparano i dati
+dimostrativi (oggi solo `seed-stock.sh`, il rifornimento del
+magazzino).
 
 Vedi la sezione "Repository Structure" in
 [polyglot-commerce-platform.md](polyglot-commerce-platform.md) per la

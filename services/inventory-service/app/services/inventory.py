@@ -37,6 +37,54 @@ def get_item(db: Session, product_id: int) -> InventoryItem:
     return item
 
 
+def ensure_item(db: Session, product_id: int) -> InventoryItem:
+    """Crea la riga di magazzino di un prodotto se non c'e' gia'.
+
+    Chiamata dal consumer di `product.created`: un prodotto appena nato non
+    ha pezzi in magazzino finche' non arrivano davvero, quindi la riga parte
+    da zero disponibili. Serve comunque crearla subito, perche' e' la
+    differenza fra "prodotto senza scorte" (rifiuto legittimo) e "prodotto
+    che il magazzino non conosce affatto" — che era il caso in cui ogni
+    ordine veniva annullato senza che nessuno sapesse perche'.
+
+    Idempotente: Kafka puo' consegnare lo stesso evento piu' volte, e
+    ricreare la riga azzererebbe scorte gia' dichiarate.
+    """
+    item = db.get(InventoryItem, product_id)
+    if item is not None:
+        logger.info("Inventory row for product %s already exists: left untouched", product_id)
+        return item
+
+    item = InventoryItem(product_id=product_id, quantity_available=0, quantity_reserved=0)
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    logger.info("Inventory row created for product %s (0 available)", product_id)
+    return item
+
+
+def set_available(db: Session, product_id: int, quantity: int) -> InventoryItem:
+    """Dichiara quante unita' sono disponibili a magazzino.
+
+    E' l'operazione con cui il magazzino registra una fornitura o corregge
+    un conteggio: tocca solo le scorte disponibili e lascia intatte quelle
+    gia' riservate da ordini in corso, che sono impegnate altrove.
+
+    Crea la riga se non esiste: i prodotti nati prima dell'evento
+    `product.created` non ne hanno una, e senza questo non ci sarebbe modo
+    di dargliela se non scrivendo nel database a mano.
+    """
+    item = db.get(InventoryItem, product_id)
+    if item is None:
+        item = InventoryItem(product_id=product_id, quantity_available=0, quantity_reserved=0)
+        db.add(item)
+
+    item.quantity_available = quantity
+    db.commit()
+    db.refresh(item)
+    return item
+
+
 def reserve(db: Session, product_id: int, quantity: int, order_id: int = None) -> Reservation:
     """Riserva una singola quantita'. Il chiamante fa il commit."""
     item = get_item(db, product_id)

@@ -19,6 +19,7 @@ from testcontainers.postgres import PostgresContainer
 
 # Gli stessi topic che init-topics.sh crea nello stack Docker.
 TOPICS = [
+    "product.created",
     "order.created",
     "order.cancelled",
     "inventory.reserved",

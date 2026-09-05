@@ -23,6 +23,8 @@ public class OrderResponse {
     private OrderStatus status;
     private BigDecimal totalAmount;
     private List<OrderItemResponse> items;
+    /** Valorizzato solo sugli ordini annullati dalla saga. */
+    private String cancellationReason;
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -35,6 +37,7 @@ public class OrderResponse {
                 .items(order.getItems().stream()
                         .map(OrderItemResponse::fromEntity)
                         .collect(Collectors.toList()))
+                .cancellationReason(order.getCancellationReason())
                 .createdAt(order.getCreatedAt())
                 .updatedAt(order.getUpdatedAt())
                 .build();

@@ -17,11 +17,18 @@ from app.events.envelope import (
     TOPIC_INVENTORY_RESERVED,
     TOPIC_ORDER_CANCELLED,
     TOPIC_ORDER_CREATED,
+    TOPIC_PRODUCT_CREATED,
     TOPIC_SAGA_DLQ,
     build_envelope,
 )
 from app.events.producer import bootstrap_servers, publish
-from app.services.inventory import InsufficientStock, UnknownProduct, release_order, reserve_order
+from app.services.inventory import (
+    InsufficientStock,
+    UnknownProduct,
+    ensure_item,
+    release_order,
+    reserve_order,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +50,7 @@ class SagaConsumer(threading.Thread):
         })
 
     def run(self) -> None:
-        self._consumer.subscribe([TOPIC_ORDER_CREATED, TOPIC_ORDER_CANCELLED])
+        self._consumer.subscribe([TOPIC_PRODUCT_CREATED, TOPIC_ORDER_CREATED, TOPIC_ORDER_CANCELLED])
         logger.info("Kafka consumer started (group=%s, brokers=%s)", CONSUMER_GROUP, bootstrap_servers())
 
         try:
@@ -76,10 +83,26 @@ class SagaConsumer(threading.Thread):
         data = envelope.get("data", {})
         correlation_id = envelope.get("correlationId")
 
-        if topic == TOPIC_ORDER_CREATED:
+        if topic == TOPIC_PRODUCT_CREATED:
+            self._on_product_created(data)
+        elif topic == TOPIC_ORDER_CREATED:
             self._on_order_created(data, correlation_id)
         elif topic == TOPIC_ORDER_CANCELLED:
             self._on_order_cancelled(data, correlation_id)
+
+    def _on_product_created(self, data: Dict[str, Any]) -> None:
+        """Un prodotto nuovo nel catalogo ottiene subito la sua riga di
+        magazzino, a zero disponibili.
+
+        Non si pubblica nulla in risposta: nessuno attende una conferma, e
+        `inventory.updated` e' l'evento delle variazioni di scorta, non
+        della nascita di una riga vuota.
+        """
+        product_id = int(data["productId"])
+        logger.info("Product %s created (sku=%s): tracking it in inventory", product_id, data.get("sku"))
+
+        with SessionLocal() as db:
+            ensure_item(db, product_id)
 
     def _on_order_created(self, data: Dict[str, Any], correlation_id: str) -> None:
         order_id = int(data["orderId"])

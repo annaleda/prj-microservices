@@ -114,6 +114,15 @@ DELETE /api/products/{id}
 GET /api/categories
 ```
 
+Pubblica `product.created` alla creazione di un prodotto. Serve
+all'Inventory Service, che apre la riga di magazzino corrispondente:
+senza, un prodotto nuovo resterebbe sconosciuto al magazzino e ogni
+ordine che lo contiene verrebbe rifiutato e annullato dalla saga.
+
+I prodotti inseriti direttamente nel database (`data.sql`) non passano
+dal servizio e quindi non generano l'evento: le loro scorte si
+dichiarano con lo script `infrastructure/demo/seed-stock.sh`.
+
 ### Order Service
 
 **Stack:** Java, Spring Boot, Spring Data JPA, Kafka, PostgreSQL.
@@ -144,19 +153,35 @@ pubblicando `payment.completed` o `payment.failed`.
 
 ``` http
 GET /api/inventory/{productId}
+PUT /api/inventory/{productId}
 POST /api/inventory/reservations
 DELETE /api/inventory/reservations/{id}
 ```
 
+`PUT /api/inventory/{productId}` e' il rifornimento: dichiara quante
+unita' sono disponibili (riservato ai ruoli WAREHOUSE e ADMIN). Si
+dichiara il totale e non una variazione, come fa chi conta cio' che ha
+sullo scaffale; le unita' gia' riservate da ordini in corso restano
+intatte. E' l'unico modo di aumentare le scorte: la saga sa solo
+riservare e rilasciare.
+
 Eventi:
 
 ``` text
+product.created
 order.created
 order.cancelled
 inventory.reserved
 inventory.rejected
 inventory.released
 ```
+
+Consumando `product.created` crea la riga di magazzino di un prodotto
+nuovo, **a zero disponibili**: un prodotto appena messo a catalogo non
+ha pezzi finche' non arrivano davvero. La riga serve comunque subito,
+perche' distingue "prodotto senza scorte" (rifiuto legittimo, con un
+motivo comprensibile) da "prodotto che il magazzino non conosce
+affatto".
 
 ### Integration Service
 
@@ -221,6 +246,7 @@ autenticazione, traffic splitting e API versioning.
 Apache Kafka rappresenta l'event backbone.
 
 ``` text
+product.created
 order.created
 order.updated
 order.cancelled
@@ -282,6 +308,18 @@ coreografia:
 I servizi di dominio comunicano quindi solo per eventi e non si
 conoscono tra loro: è l'Integration Service a decidere quale passo
 segue quale, e quando compensare.
+
+**Motivo dell'annullamento.** `order.cancelled` porta due campi: un
+`reasonCode` (`INVENTORY_REJECTED`, `PAYMENT_FAILED`,
+`SAGA_STATE_LOST`) e un `reason` in testo libero. Il codice è il
+contratto — l'Order Service lo registra sull'ordine e il checkout ci
+sceglie il messaggio da mostrare al cliente — mentre il testo serve a
+chi legge i log e può essere riformulato senza rompere nulla.
+
+Senza questa distinzione il cliente vedrebbe solo "ordine annullato",
+mentre scorte esaurite e pagamento rifiutato hanno rimedi opposti:
+togliere un articolo dal carrello nel primo caso, riprovare il
+pagamento nel secondo.
 
 Nota sullo stato: l'orchestratore tiene le saghe in corso in memoria.
 Al suo riavvio quelle ancora aperte perdono il contesto, e un

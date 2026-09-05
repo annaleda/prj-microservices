@@ -13,6 +13,18 @@ from app.routers.inventory import router as inventory_router
 
 logging.basicConfig(level=logging.INFO)
 
+# Righe di magazzino minime create all'avvio.
+#
+# NON e' l'inventario del catalogo: sono tre prodotti fittizi su cui si
+# appoggiano i test delle API e con cui il servizio e' provabile appena
+# avviato, anche senza gli altri microservizi accesi.
+#
+# Le scorte dei prodotti veri si dichiarano con PUT /api/inventory/{id}
+# (script infrastructure/demo/seed-stock.sh, che legge il catalogo dalle
+# sue API e non deve percio' conoscerne gli identificativi). Una copia a
+# mano degli id del catalogo dentro questo servizio e' esattamente cio' che
+# il 5 settembre 2026 ha fatto annullare ogni ordine sui nuovi prodotti:
+# il catalogo era cresciuto, questa lista no.
 _SEED_STOCK = {1: 100, 2: 50, 3: 30}
 
 

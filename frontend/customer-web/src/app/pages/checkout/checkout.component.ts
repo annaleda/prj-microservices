@@ -1,6 +1,6 @@
 import { Component } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
-import { OrderResponse } from '../../models/order.model';
+import { cancellationMessage as messageForReason, OrderResponse } from '../../models/order.model';
 import { AuthService } from '../../services/auth.service';
 import { CartService } from '../../services/cart.service';
 import { OrderService } from '../../services/order.service';
@@ -25,6 +25,16 @@ export class CheckoutComponent {
     private readonly orderService: OrderService,
     readonly auth: AuthService
   ) {}
+
+  /**
+   * Perche' l'ordine e' stato annullato, in italiano.
+   *
+   * Prima il checkout diceva solo "scorte non disponibili oppure pagamento
+   * rifiutato": due cause diverse, con rimedi diversi, indistinguibili.
+   */
+  get cancellationMessage(): string {
+    return messageForReason(this.order?.cancellationReason);
+  }
 
   get total(): number {
     return this.cartService.snapshot.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);

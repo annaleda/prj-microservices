@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional
 SOURCE = "inventory-service"
 
 # Topic dell'event catalog usati da questo servizio.
+TOPIC_PRODUCT_CREATED = "product.created"
 TOPIC_ORDER_CREATED = "order.created"
 TOPIC_ORDER_CANCELLED = "order.cancelled"
 TOPIC_INVENTORY_RESERVED = "inventory.reserved"
