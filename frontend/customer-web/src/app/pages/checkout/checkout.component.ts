@@ -1,6 +1,7 @@
 import { Component } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { OrderResponse } from '../../models/order.model';
+import { AuthService } from '../../services/auth.service';
 import { CartService } from '../../services/cart.service';
 import { OrderService } from '../../services/order.service';
 
@@ -12,7 +13,6 @@ import { OrderService } from '../../services/order.service';
 export class CheckoutComponent {
   items$ = this.cartService.items$;
 
-  customerEmail = '';
   submitting = false;
   /** L'ordine e' stato creato e si attende l'esito della saga. */
   awaitingOutcome = false;
@@ -22,7 +22,8 @@ export class CheckoutComponent {
 
   constructor(
     private readonly cartService: CartService,
-    private readonly orderService: OrderService
+    private readonly orderService: OrderService,
+    readonly auth: AuthService
   ) {}
 
   get total(): number {
@@ -42,7 +43,7 @@ export class CheckoutComponent {
     this.submitting = true;
 
     this.orderService
-      .createOrder({ customerEmail: this.customerEmail, items: this.cartService.snapshot })
+      .createOrder({ items: this.cartService.snapshot })
       .subscribe({
         next: (order) => {
           this.order = order;

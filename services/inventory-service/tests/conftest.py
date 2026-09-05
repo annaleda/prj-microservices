@@ -71,6 +71,27 @@ def client(postgres_container, kafka_bootstrap):
         yield test_client
 
 
+@pytest.fixture
+def login(client):
+    """Fa risultare le richieste come provenienti da un utente con dati ruoli.
+
+    Sostituisce la sola dipendenza che valida il token: le regole di
+    autorizzazione degli endpoint restano quelle vere, mentre non serve un
+    Keycloak in piedi per ogni test. Che i token veri vengano accettati e'
+    verificato end-to-end a mano (vedi README, sezione 5).
+    """
+    from app.main import app
+    from app.security import Principal, current_principal
+
+    def _login(*roles, username="test-user", email="test@example.com"):
+        app.dependency_overrides[current_principal] = lambda: Principal(
+            username=username, email=email, roles=list(roles)
+        )
+
+    yield _login
+    app.dependency_overrides.pop(current_principal, None)
+
+
 def publish(bootstrap: str, topic: str, key, event_type: str, data: dict) -> None:
     envelope = {
         "eventId": str(uuid.uuid4()),

@@ -20,7 +20,7 @@ Microservizi implementati finora:
 
 Questa sezione parte da **Catalog Service**, il piu' semplice (nessun
 evento, solo REST + database); per il flusso a eventi vedi la
-[sezione 3](#3-provare-la-saga-order---inventory---payment).
+[sezione 4](#4-provare-la-saga-order---inventory---payment).
 
 ### Prerequisiti
 
@@ -112,10 +112,65 @@ docker compose up -d kafka kafka-init kafka-ui
 
 > Order, Inventory, Payment e Integration Service pubblicano e
 > consumano questi topic: è su di essi che gira la saga descritta
-> nella [sezione 3](#3-provare-la-saga-order---inventory---payment).
+> nella [sezione 4](#4-provare-la-saga-order---inventory---payment).
 > Dettagli in [infrastructure/kafka/README.md](infrastructure/kafka/README.md).
 
-## 3. Provare la saga Order -> Inventory -> Payment
+## 3. Autenticazione con Keycloak
+
+Le API non sono piu' aperte: **Keycloak** emette i token, i servizi ne
+verificano la firma con le chiavi pubbliche del realm e decidono in base
+ai ruoli. Il catalogo resta l'unica cosa leggibile senza login - e' la
+vetrina del negozio.
+
+```bash
+docker compose up -d keycloak
+```
+
+Console su `http://localhost:8180` (`admin`/`admin`), realm
+`polyglot-commerce`. Configurazione, utenti demo e dettagli in
+[infrastructure/keycloak/README.md](infrastructure/keycloak/README.md).
+
+### 3.1 Chi puo' fare cosa
+
+| Operazione | Chi |
+|---|---|
+| Sfogliare catalogo e categorie | chiunque, anche senza login |
+| Creare e rileggere i propri ordini | `CUSTOMER` |
+| Modificare il catalogo | `ADMIN` |
+| Cambiare a mano lo stato di un ordine | `ADMIN` |
+| Vedere gli ordini di tutti | `ADMIN`, `SUPPORT` |
+| Creare pagamenti a mano | `ADMIN` |
+| Leggere i pagamenti | `ADMIN`, `SUPPORT` |
+| Leggere le scorte | qualunque utente autenticato |
+| Muovere scorte e prenotazioni | `WAREHOUSE`, `ADMIN` |
+
+Un ordine viene intestato a **chi presenta il token**: l'email non si
+manda piu' nella richiesta, e un cliente non puo' leggere gli ordini di
+un altro (403).
+
+### 3.2 Ottenere un token per provare le API
+
+Gli utenti demo hanno password uguale allo username:
+
+```bash
+TOKEN=$(curl -s -X POST   http://localhost:8180/realms/polyglot-commerce/protocol/openid-connect/token   -d client_id=customer-web -d grant_type=password   -d username=customer -d password=customer   | python -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
+
+curl -s http://localhost:8083/api/inventory/1                          # 401
+curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8083/api/inventory/1   # 200
+```
+
+Gli altri utenti sono `admin` (ruolo ADMIN) e `warehouse` (ruolo
+WAREHOUSE); per loro usa `client_id=admin-web`.
+
+### 3.3 Dal browser
+
+Customer Web e Admin Web fanno login con Keycloak (authorization code +
+PKCE) e allegano da soli il token alle chiamate API. In Customer Web il
+catalogo si sfoglia da disconnessi e il login serve solo al checkout;
+Admin Web richiede il ruolo ADMIN per intero e lo dice esplicitamente a
+chi entra senza averlo.
+
+## 4. Provare la saga Order -> Inventory -> Payment
 
 E' il flusso a eventi del progetto. L'unica azione richiesta e' creare
 un ordine: riserva delle scorte, pagamento ed esito finale avvengono
@@ -132,7 +187,7 @@ Integration Service (saga) <---------------------------- payment.requested
       +--> order.cancelled (+ rilascio scorte) <--- payment.failed
 ```
 
-### 3.1 Avviare infrastruttura e servizi
+### 4.1 Avviare infrastruttura e servizi
 
 Dalla radice del repository:
 
@@ -149,45 +204,56 @@ cd services/payment-service     && mvn -s .mvn/settings.xml spring-boot:run   # 
 cd services/integration-service && mvn -s .mvn/settings.xml spring-boot:run   # 8085
 ```
 
+Gli esempi che seguono usano i token della sezione 3.2:
+
+```bash
+get_token() {
+  curl -s -X POST http://localhost:8180/realms/polyglot-commerce/protocol/openid-connect/token     -d "client_id=$2" -d grant_type=password -d "username=$1" -d "password=$1"     | python -c "import sys,json;print(json.load(sys.stdin)['access_token'])"
+}
+CUSTOMER=$(get_token customer customer-web)
+AUTH="Authorization: Bearer $CUSTOMER"
+```
+
 > L'Inventory Service richiede le dipendenze Python installate
 > (`pip install -r requirements.txt`, preferibilmente in un
 > virtualenv). Il suo consumer Kafka si puo' spegnere con
 > `EVENTS_ENABLED=false` per usarlo come sola API REST.
 
-### 3.2 Percorso felice: ordine confermato
+### 4.2 Percorso felice: ordine confermato
 
 ```bash
-curl -s http://localhost:8083/api/inventory/1          # scorte prima
+curl -s -H "$AUTH" http://localhost:8083/api/inventory/1     # scorte prima
 
-curl -s -X POST http://localhost:8082/api/orders   -H "Content-Type: application/json"   -d '{"customerEmail":"demo@example.com","items":[{"productId":1,"productName":"Wireless Mouse","quantity":2,"unitPrice":29.90}]}'
+# Nessuna email nella richiesta: l'ordine e' intestato a chi ha il token.
+curl -s -X POST http://localhost:8082/api/orders -H "$AUTH"   -H "Content-Type: application/json"   -d '{"items":[{"productId":1,"productName":"Wireless Mouse","quantity":2,"unitPrice":29.90}]}'
 
 # dopo un paio di secondi (l'id e' quello restituito sopra)
-curl -s http://localhost:8082/api/orders/1             # status: CONFIRMED
-curl -s http://localhost:8083/api/inventory/1          # 2 pezzi riservati
+curl -s -H "$AUTH" http://localhost:8082/api/orders/1        # status: CONFIRMED
+curl -s -H "$AUTH" http://localhost:8083/api/inventory/1     # 2 pezzi riservati
 ```
 
-### 3.3 Pagamento rifiutato: compensazione
+### 4.3 Pagamento rifiutato: compensazione
 
 Il gateway di pagamento simulato rifiuta gli importi da 10.000 in su.
 L'ordine viene annullato **e le scorte riservate tornano disponibili**:
 
 ```bash
-curl -s -X POST http://localhost:8082/api/orders   -H "Content-Type: application/json"   -d '{"customerEmail":"demo@example.com","items":[{"productId":2,"productName":"Mechanical Keyboard","quantity":40,"unitPrice":250.00}]}'
+curl -s -X POST http://localhost:8082/api/orders -H "$AUTH"   -H "Content-Type: application/json"   -d '{"items":[{"productId":2,"productName":"Mechanical Keyboard","quantity":40,"unitPrice":250.00}]}'
 
 # status: CANCELLED, e le scorte del prodotto 2 sono di nuovo quelle di partenza
-curl -s http://localhost:8083/api/inventory/2
+curl -s -H "$AUTH" http://localhost:8083/api/inventory/2
 ```
 
-### 3.4 Scorte insufficienti: saga interrotta subito
+### 4.4 Scorte insufficienti: saga interrotta subito
 
 ```bash
-curl -s -X POST http://localhost:8082/api/orders   -H "Content-Type: application/json"   -d '{"customerEmail":"demo@example.com","items":[{"productId":3,"productName":"Rare Book","quantity":9999,"unitPrice":10.00}]}'
+curl -s -X POST http://localhost:8082/api/orders -H "$AUTH"   -H "Content-Type: application/json"   -d '{"items":[{"productId":3,"productName":"Rare Book","quantity":9999,"unitPrice":10.00}]}'
 ```
 
 L'ordine risulta `CANCELLED` senza che venga creato alcun pagamento:
 la saga si ferma al rifiuto delle scorte.
 
-### 3.5 Vedere gli eventi
+### 4.5 Vedere gli eventi
 
 Su `http://localhost:8090` (kafka-ui) si possono ispezionare i topic
 uno per uno e leggere gli envelope JSON. Tutti gli eventi di una
@@ -196,14 +262,15 @@ ricostruibile da un capo all'altro. Il topic `saga.dlq` deve restare
 vuoto: se contiene qualcosa, un consumer non e' riuscito a processare
 un messaggio nemmeno dopo i tentativi previsti.
 
-### 3.6 Dal browser
+### 4.6 Dal browser
 
-Con Customer Web (`npm start` in `frontend/customer-web`, vedi 1.4) il
-checkout crea l'ordine e poi ne attende l'esito, mostrando "ordine
-confermato" o "ordine annullato" quando la saga si chiude. Serve
-anche Catalog Service (8081) per il catalogo.
+Con Customer Web (`npm start` in `frontend/customer-web`, vedi 1.4): si
+accede con l'utente `customer`, si aggiunge qualcosa al carrello e il
+checkout crea l'ordine e ne attende l'esito, mostrando "ordine
+confermato" o "ordine annullato" quando la saga si chiude. Servono anche
+Catalog Service (8081) per il catalogo e Keycloak per il login.
 
-## 4. Avviare l'infrastruttura Kubernetes con API Gateway
+## 5. Avviare l'infrastruttura Kubernetes con API Gateway
 
 I manifest si trovano in `infrastructure/kubernetes/` (pattern
 base/overlays con Kustomize) e usano la **Kubernetes Gateway API**
@@ -217,7 +284,7 @@ alla prima esecuzione.
 
 - `kubectl`, `kind`, `helm` (già presenti su questa macchina)
 
-### 4.1 Creare un cluster dedicato
+### 5.1 Creare un cluster dedicato
 
 Usa un cluster **dedicato al progetto**, non un cluster kind già in
 uso per altro:
@@ -227,7 +294,7 @@ kind create cluster --name polyglot-commerce
 kubectl config use-context kind-polyglot-commerce
 ```
 
-### 4.2 Installare Envoy Gateway (il controller della Gateway API)
+### 5.2 Installare Envoy Gateway (il controller della Gateway API)
 
 ```bash
 helm install eg oci://docker.io/envoyproxy/gateway-helm \
@@ -239,7 +306,7 @@ kubectl wait --timeout=5m -n envoy-gateway-system \
   deployment/envoy-gateway --for=condition=Available
 ```
 
-### 4.3 Costruire e caricare le immagini dei servizi
+### 5.3 Costruire e caricare le immagini dei servizi
 
 Il cluster kind non ha accesso automatico alle immagini Docker locali:
 vanno costruite e caricate esplicitamente, una per servizio.
@@ -251,7 +318,7 @@ for svc in catalog-service order-service inventory-service payment-service integ
 done
 ```
 
-### 4.4 Applicare i manifest (overlay locale)
+### 5.4 Applicare i manifest (overlay locale)
 
 ```bash
 kubectl apply -k infrastructure/kubernetes/overlays/local
@@ -267,7 +334,7 @@ kubectl -n polyglot-commerce get gateway polyglot-commerce-gateway
 > di rete diversa). Assicurati quindi che `docker compose up -d` (tutti
 > i database) sia attivo **prima** di applicare questo overlay.
 
-### 4.5 Esporre il Gateway e testare il routing
+### 5.5 Esporre il Gateway e testare il routing
 
 Envoy Gateway crea un `Service` per il listener HTTP del `Gateway`.
 Su kind (senza LoadBalancer reale) si usa `port-forward`:
@@ -293,7 +360,14 @@ curl http://localhost:8080/api/payments/1
 Se tutto funziona, le richieste passano: client → Gateway (Envoy) →
 `HTTPRoute` → Service del servizio corrispondente → Pod.
 
-### 4.6 Pulizia
+> Solo `/api/products` e `/api/categories` rispondono 200 senza token:
+> sulle altre rotte un **401 e' gia' un esito corretto**, vuol dire che
+> la richiesta ha raggiunto il servizio ed e' stata respinta dal
+> controllo di sicurezza, non persa dal gateway. Per ottenere 200 serve
+> un token valido, e li' entra in gioco l'avvertenza sull'issuer scritta
+> nell'overlay `local`.
+
+### 5.6 Pulizia
 
 ```bash
 kind delete cluster --name polyglot-commerce

@@ -1,5 +1,6 @@
 import { Component } from '@angular/core';
 import { map } from 'rxjs';
+import { AuthService } from './services/auth.service';
 import { CartService } from './services/cart.service';
 
 @Component({
@@ -14,5 +15,8 @@ export class AppComponent {
     map((items) => items.reduce((sum, item) => sum + item.quantity, 0))
   );
 
-  constructor(private readonly cartService: CartService) {}
+  constructor(
+    private readonly cartService: CartService,
+    readonly auth: AuthService
+  ) {}
 }

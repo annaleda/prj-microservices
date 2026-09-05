@@ -5,19 +5,17 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import javax.validation.Valid;
-import javax.validation.constraints.Email;
-import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotEmpty;
 import java.util.List;
 
+/**
+ * Nota: non contiene piu' l'email del cliente. L'ordine viene intestato a
+ * chi presenta il token, non a un indirizzo scritto nella richiesta.
+ */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class OrderRequest {
-
-    @NotBlank
-    @Email
-    private String customerEmail;
 
     @NotEmpty
     @Valid

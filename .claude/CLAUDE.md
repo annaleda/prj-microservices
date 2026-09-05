@@ -652,3 +652,115 @@ e il documento di design.
 identita' reale ai clienti al posto dell'email libera nel checkout,
 oppure il deploy vero su un cluster kind dedicato - proposta ancora in
 sospeso da tre sessioni.
+
+### 15. Keycloak e OAuth2: le API non sono piu' aperte (Phase 4)
+
+Chiusa la Phase 3, scelta la Phase 4 della roadmap. Fino a qui chiunque
+poteva creare ordini intestandoli a un'email scritta a mano e l'Admin
+Web faceva CRUD sul catalogo senza autenticarsi.
+
+**Keycloak** aggiunto a `docker-compose.yml` (immagine 25.0, `start-dev`),
+e finalmente **`auth-db` viene usato**: era stato creato nella prima
+sessione per l'area autenticazione ed era rimasto vuoto da allora. Il
+realm non si configura dalla console ma si **importa da JSON**
+(`infrastructure/keycloak/realm-polyglot-commerce.json`, montato e
+caricato con `--import-realm`): ruoli, client e utenti demo sono
+versionati e ricreabili da zero. Ruoli come da documento di design:
+CUSTOMER, ADMIN, WAREHOUSE, SUPPORT. Due client pubblici con PKCE
+(`customer-web`, `admin-web`): girano nel browser e non possono
+custodire un segreto.
+
+**Resource server** in Catalog, Order, Payment (Spring Security OAuth2)
+e Inventory (PyJWT + JWKS scritto a mano). L'Integration Service non ha
+API HTTP - parla solo per eventi - quindi non c'e' nulla da proteggere.
+Nessun segreto e' condiviso con Keycloak: i servizi verificano la firma
+con le chiavi pubbliche del realm.
+
+Chi puo' fare cosa e' riassunto nel README (sezione 3.1) e nel documento
+di design (sezione 9). Le due decisioni non banali:
+- il **catalogo resta pubblico in lettura**: e' la vetrina, senza
+  sarebbe un negozio a porte chiuse;
+- un **ordine e' intestato a chi presenta il token**: `customerEmail` e'
+  sparito da `OrderRequest`, e un cliente che chiede l'ordine di un
+  altro riceve **403 e non 404** (l'ordine esiste, non e' suo). Il
+  filtro "vedo solo i miei ordini" sta nel service e non nella
+  configurazione di sicurezza, perche' e' una regola sui dati, non
+  sull'URL.
+
+**Trappola trovata scrivendo i test (una mezz'ora persa)**: i token
+finti dei test avevano forma `utente:RUOLI:email` e venivano rifiutati
+con 401 senza mai arrivare al decoder. Il motivo e' che il filtro dei
+bearer token accetta solo i caratteri previsti da RFC 6750
+(`token68`): ':' e '@' lo rendono malformato. Il payload finto ora
+viaggia in **base64url**.
+
+**Come sono testate le autorizzazioni**: con un `JwtDecoder` finto nei
+servizi Java e la sostituzione della dipendenza che valida il token in
+quello Python. Le regole verificate sono quelle vere (chi ottiene 200,
+chi 401, chi 403); a non essere verificata nei test e' la firma, che
+Keycloak sa gia' fare. Avviare un identity provider per ogni classe di
+test costerebbe minuti e legherebbe i test alla sua configurazione.
+Dichiarare un bean `JwtDecoder` ha anche l'effetto utile di evitare che
+Spring contatti l'issuer all'avvio dei test.
+
+Test: Catalog 5/5, Order 11/11, Payment 9/9, Inventory 12/12,
+Integration 5/5 (invariato).
+
+**Frontend**. Customer Web: `angular-oauth2-oidc`, con
+`OAuthModule.forRoot({resourceServer: ...})` che allega da solo il token
+alle chiamate `/api` - nessun interceptor scritto a mano. Il catalogo
+resta sfogliabile da disconnessi e il login serve al checkout, dove il
+campo email e' stato tolto. Admin Web: `react-oidc-context`, con un
+ponte esplicito (`api/authToken.ts`) fra il contesto React e il client
+`fetch`, che essendo fatto di funzioni non puo' usare hook; chi entra
+senza ruolo ADMIN vede un messaggio chiaro invece di una console che
+risponde 403 a ogni click.
+
+**Verifica end-to-end con token veri firmati da Keycloak** (non i finti
+dei test):
+
+| Richiesta | Senza token | CUSTOMER | ADMIN / WAREHOUSE |
+|---|---|---|---|
+| GET /api/products | 200 | 200 | 200 |
+| POST /api/products | 401 | 403 | 201 (ADMIN) |
+| GET /api/inventory/1 | 401 | 200 | 200 |
+| POST prenotazione | 401 | 403 | 201 (WAREHOUSE) |
+| POST /api/orders | 401 | 201 | 403 (ADMIN non e' un cliente) |
+| PATCH stato ordine | 401 | 403 | 200 (ADMIN) |
+| GET /api/payments/1 | 401 | 403 | 200 (ADMIN) |
+
+L'ordine creato con il token di `customer` risulta intestato a
+`customer@example.com` senza che l'email sia mai stata inviata, e la
+saga lo ha portato a CONFIRMED come prima: la sicurezza HTTP non
+interferisce con il flusso a eventi. Nella lista ordini il cliente ne
+vede 1, l'admin tutti e 9.
+
+**Cosa non e' stato verificato**: il redirect di login vero e proprio,
+che richiede un browser. Sono stati controllati i pezzi che di solito
+si sbagliano - l'endpoint di autorizzazione accetta i due client con i
+loro redirect_uri, rifiuta un redirect_uri estraneo, e il documento di
+discovery risponde con CORS all'origine del frontend.
+
+**Kubernetes**: aggiunto `KEYCLOAK_ISSUER_URI` ai ConfigMap dei quattro
+servizi. Nell'overlay `local` c'e' un avvertimento che vale la pena
+ricordare: quell'URL non serve solo a *raggiungere* Keycloak, decide
+anche quale `iss` e' accettabile. Se il browser prende i token da
+`localhost:8180` e il servizio si aspetta un altro hostname, li rifiuta
+tutti pur essendo la firma valida; perche' funzioni, Keycloak deve
+essere raggiungibile allo stesso URL da browser e da pod (KC_HOSTNAME).
+E' il tipo di dettaglio che si scopre solo al primo deploy reale.
+
+**Volutamente non fatto**: il client per l'OAuth2 Client Credentials
+Grant previsto dal documento. Oggi nessun servizio chiama un altro via
+HTTP - comunicano solo per eventi - quindi sarebbero credenziali senza
+alcun uso. Annotato in `infrastructure/keycloak/README.md`. Allo stesso
+modo l'**Auth Service** del documento resta non implementato:
+identita' e ruoli li gestisce Keycloak, e quel servizio avra' senso
+quando ci saranno dati di profilo applicativi (indirizzi, preferenze,
+consensi). Segnalato nel documento di design.
+
+**Prossimo passo naturale**: Notification Service (chiude gli ultimi
+topic dell'event catalog senza consumer), Observability (Phase 5, ora
+che c'e' un correlationId da propagare in un flusso a quattro
+servizi), oppure il deploy vero su cluster kind - in sospeso da tre
+sessioni, e ora con in piu' la questione dell'issuer da risolvere.

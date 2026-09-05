@@ -7,7 +7,9 @@ import com.polyglotcommerce.payment.model.PaymentStatus;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -24,8 +26,15 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import static com.polyglotcommerce.payment.TestJwtSupport.ADMIN;
+import static com.polyglotcommerce.payment.TestJwtSupport.ANONYMOUS;
+import static com.polyglotcommerce.payment.TestJwtSupport.CUSTOMER;
+import static com.polyglotcommerce.payment.TestJwtSupport.SUPPORT;
+import static com.polyglotcommerce.payment.TestJwtSupport.as;
+
 @Testcontainers
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Import(TestJwtSupport.class)
 class PaymentApiIntegrationTest {
 
     @Container
@@ -54,16 +63,16 @@ class PaymentApiIntegrationTest {
     void createAndReadSuccessfulPayment() {
         PaymentRequest request = new PaymentRequest(1L, new BigDecimal("59.80"), "CARD");
 
-        ResponseEntity<PaymentResponse> createResponse =
-                restTemplate.postForEntity("/api/payments", request, PaymentResponse.class);
+        ResponseEntity<PaymentResponse> createResponse = restTemplate.exchange(
+                "/api/payments", HttpMethod.POST, as(ADMIN, request), PaymentResponse.class);
 
         assertThat(createResponse.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         PaymentResponse created = createResponse.getBody();
         assertThat(created.getId()).isNotNull();
         assertThat(created.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
 
-        ResponseEntity<PaymentResponse> getResponse =
-                restTemplate.getForEntity("/api/payments/" + created.getId(), PaymentResponse.class);
+        ResponseEntity<PaymentResponse> getResponse = restTemplate.exchange(
+                "/api/payments/" + created.getId(), HttpMethod.GET, as(ADMIN), PaymentResponse.class);
         assertThat(getResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(getResponse.getBody().getOrderId()).isEqualTo(1L);
     }
@@ -72,8 +81,8 @@ class PaymentApiIntegrationTest {
     void paymentAboveSimulatedThresholdIsDeclined() {
         PaymentRequest request = new PaymentRequest(2L, new BigDecimal("15000.00"), "CARD");
 
-        ResponseEntity<PaymentResponse> response =
-                restTemplate.postForEntity("/api/payments", request, PaymentResponse.class);
+        ResponseEntity<PaymentResponse> response = restTemplate.exchange(
+                "/api/payments", HttpMethod.POST, as(ADMIN, request), PaymentResponse.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.getBody().getStatus()).isEqualTo(PaymentStatus.FAILED);
@@ -81,7 +90,8 @@ class PaymentApiIntegrationTest {
 
     @Test
     void getUnknownPaymentReturns404() {
-        ResponseEntity<String> response = restTemplate.getForEntity("/api/payments/999999", String.class);
+        ResponseEntity<String> response = restTemplate.exchange(
+                "/api/payments/999999", HttpMethod.GET, as(ADMIN), String.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
@@ -140,5 +150,37 @@ class PaymentApiIntegrationTest {
         KafkaTestSupport.send(kafka.getBootstrapServers(), "payment.requested", String.valueOf(orderId),
                 KafkaTestSupport.envelope("PAYMENT_REQUESTED", "test-correlation",
                         "{\"orderId\":" + orderId + ",\"amount\":" + amount + ",\"method\":\"CARD\"}"));
+    }
+
+    @Test
+    void paymentsApiIsNotPublic() {
+        PaymentRequest request = new PaymentRequest(500L, new BigDecimal("10.00"), "CARD");
+
+        assertThat(restTemplate.exchange("/api/payments", HttpMethod.POST, as(ANONYMOUS, request), String.class)
+                .getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(restTemplate.exchange("/api/payments/1", HttpMethod.GET, as(ANONYMOUS), String.class)
+                .getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void customersCannotUseThePaymentsApi() {
+        PaymentRequest request = new PaymentRequest(501L, new BigDecimal("10.00"), "CARD");
+
+        assertThat(restTemplate.exchange("/api/payments", HttpMethod.POST, as(CUSTOMER, request), String.class)
+                .getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void supportCanReadButNotCreatePayments() {
+        PaymentResponse created = restTemplate.exchange("/api/payments", HttpMethod.POST,
+                as(ADMIN, new PaymentRequest(502L, new BigDecimal("12.00"), "CARD")),
+                PaymentResponse.class).getBody();
+
+        assertThat(restTemplate.exchange("/api/payments/" + created.getId(), HttpMethod.GET,
+                as(SUPPORT), PaymentResponse.class).getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        assertThat(restTemplate.exchange("/api/payments", HttpMethod.POST,
+                as(SUPPORT, new PaymentRequest(503L, new BigDecimal("12.00"), "CARD")), String.class)
+                .getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     }
 }

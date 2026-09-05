@@ -7,3 +7,4 @@ data:
   CATALOG_DB_HOST: catalog-db
   CATALOG_DB_PORT: "5432"
   CATALOG_DB_NAME: catalog
+  KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/polyglot-commerce

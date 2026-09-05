@@ -27,12 +27,17 @@
 
     <p class="checkout__total"><strong>Totale: {{ total | currency: 'EUR' }}</strong></p>
 
-    <label>
-      Email cliente
-      <input type="email" required [(ngModel)]="customerEmail" name="customerEmail" />
-    </label>
+    <p *ngIf="auth.isLoggedIn; else loginToOrder">
+      Ordine intestato a <strong>{{ auth.username }}</strong>.
+    </p>
+    <ng-template #loginToOrder>
+      <p>
+        Per completare l'ordine devi
+        <a href="javascript:void(0)" (click)="auth.login()">accedere</a>.
+      </p>
+    </ng-template>
 
-    <button (click)="placeOrder()" [disabled]="submitting || !customerEmail || total === 0">
+    <button (click)="placeOrder()" [disabled]="submitting || !auth.isLoggedIn || total === 0">
       Effettua ordine
     </button>
   </ng-container>

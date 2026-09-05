@@ -1,6 +1,15 @@
 <header class="app-header">
   <a routerLink="/" class="app-header__brand">Polyglot Commerce</a>
   <a routerLink="/checkout" class="app-header__cart">Carrello ({{ cartCount$ | async }})</a>
+
+  <span class="app-header__auth">
+    <ng-container *ngIf="auth.isLoggedIn; else loginLink">
+      {{ auth.username }} &middot; <a href="javascript:void(0)" (click)="auth.logout()">Esci</a>
+    </ng-container>
+    <ng-template #loginLink>
+      <a href="javascript:void(0)" (click)="auth.login()">Accedi</a>
+    </ng-template>
+  </span>
 </header>
 
 <main class="app-main">

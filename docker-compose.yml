@@ -113,6 +113,38 @@ services:
       timeout: 5s
       retries: 10
 
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0
+    container_name: keycloak
+    command: ["start-dev", "--import-realm"]
+    depends_on:
+      auth-db:
+        condition: service_healthy
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://auth-db:5432/${AUTH_DB_NAME}
+      KC_DB_USERNAME: ${AUTH_DB_USER}
+      KC_DB_PASSWORD: ${AUTH_DB_PASSWORD}
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "${KEYCLOAK_PORT}:8080"
+    volumes:
+      # Il realm viene importato all'avvio invece di essere configurato a
+      # mano dalla console: la configurazione (ruoli, client, utenti demo)
+      # sta nel repository ed e' ricreabile da zero.
+      - ./infrastructure/keycloak/realm-polyglot-commerce.json:/opt/keycloak/data/import/realm.json:ro
+    networks:
+      - commerce-network
+    healthcheck:
+      # L'immagine di Keycloak non ha curl ne' wget: si verifica con bash
+      # che la porta HTTP accetti connessioni.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
   kafka:
     image: apache/kafka:3.8.0
     container_name: kafka

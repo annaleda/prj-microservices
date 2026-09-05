@@ -32,7 +32,9 @@ def order_created(bootstrap, order_id, product_id, quantity):
     })
 
 
-def test_order_created_reserves_stock(client, kafka_bootstrap):
+def test_order_created_reserves_stock(client, login, kafka_bootstrap):
+    login("WAREHOUSE")
+
     order_created(kafka_bootstrap, 300, 900, 3)
 
     envelope = await_event(kafka_bootstrap, "inventory.reserved", 300)
@@ -52,7 +54,9 @@ def test_order_created_reserves_stock(client, kafka_bootstrap):
     assert stock["quantityReserved"] == 3
 
 
-def test_order_created_without_enough_stock_is_rejected(client, kafka_bootstrap):
+def test_order_created_without_enough_stock_is_rejected(client, login, kafka_bootstrap):
+    login("WAREHOUSE")
+
     order_created(kafka_bootstrap, 301, 901, 9999)
 
     envelope = await_event(kafka_bootstrap, "inventory.rejected", 301)
@@ -66,7 +70,9 @@ def test_order_created_without_enough_stock_is_rejected(client, kafka_bootstrap)
     assert stock["quantityReserved"] == 0
 
 
-def test_order_cancelled_releases_the_reservation(client, kafka_bootstrap):
+def test_order_cancelled_releases_the_reservation(client, login, kafka_bootstrap):
+    login("WAREHOUSE")
+
     order_created(kafka_bootstrap, 302, 902, 4)
     await_event(kafka_bootstrap, "inventory.reserved", 302)
 
@@ -83,7 +89,9 @@ def test_order_cancelled_releases_the_reservation(client, kafka_bootstrap):
     assert stock["quantityReserved"] == 0
 
 
-def test_redelivered_order_created_does_not_reserve_twice(client, kafka_bootstrap):
+def test_redelivered_order_created_does_not_reserve_twice(client, login, kafka_bootstrap):
+    login("WAREHOUSE")
+
     order_created(kafka_bootstrap, 303, 903, 5)
     await_event(kafka_bootstrap, "inventory.reserved", 303)
 

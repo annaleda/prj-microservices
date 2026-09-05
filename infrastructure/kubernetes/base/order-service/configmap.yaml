@@ -8,3 +8,4 @@ data:
   ORDERS_DB_PORT: "5432"
   ORDERS_DB_NAME: orders
   KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/polyglot-commerce

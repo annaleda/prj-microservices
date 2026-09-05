@@ -8,3 +8,4 @@ data:
   PAYMENTS_DB_PORT: "5432"
   PAYMENTS_DB_NAME: payments
   KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  KEYCLOAK_ISSUER_URI: http://keycloak:8080/realms/polyglot-commerce

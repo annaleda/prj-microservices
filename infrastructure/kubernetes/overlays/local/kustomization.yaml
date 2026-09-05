@@ -106,3 +106,42 @@ patches:
       - op: replace
         path: /data/KAFKA_BOOTSTRAP_SERVERS
         value: host.docker.internal:9094
+  # Keycloak, come i database e Kafka, gira su docker-compose sull'host.
+  #
+  # Attenzione a questo valore: non serve solo a raggiungere l'identity
+  # provider, ma anche a decidere quale "iss" e' accettabile nei token. Il
+  # browser ottiene i token da http://localhost:8180 e quell'indirizzo
+  # finisce dentro il token; un servizio che si aspetta un issuer diverso
+  # li rifiuta tutti, anche con la firma corretta. Perche' il login dal
+  # browser funzioni davvero dentro il cluster, Keycloak deve essere
+  # raggiungibile allo *stesso* URL da browser e da pod (si fissa con
+  # KC_HOSTNAME); host.docker.internal soddisfa solo la seconda meta'.
+  # E' uno dei punti da verificare al primo deploy reale.
+  - target:
+      kind: ConfigMap
+      name: catalog-service-config
+    patch: |-
+      - op: replace
+        path: /data/KEYCLOAK_ISSUER_URI
+        value: http://host.docker.internal:8180/realms/polyglot-commerce
+  - target:
+      kind: ConfigMap
+      name: order-service-config
+    patch: |-
+      - op: replace
+        path: /data/KEYCLOAK_ISSUER_URI
+        value: http://host.docker.internal:8180/realms/polyglot-commerce
+  - target:
+      kind: ConfigMap
+      name: payment-service-config
+    patch: |-
+      - op: replace
+        path: /data/KEYCLOAK_ISSUER_URI
+        value: http://host.docker.internal:8180/realms/polyglot-commerce
+  - target:
+      kind: ConfigMap
+      name: inventory-service-config
+    patch: |-
+      - op: replace
+        path: /data/KEYCLOAK_ISSUER_URI
+        value: http://host.docker.internal:8180/realms/polyglot-commerce

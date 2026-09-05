@@ -8,7 +8,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -21,8 +23,14 @@ import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import static com.polyglotcommerce.catalog.TestJwtSupport.ADMIN;
+import static com.polyglotcommerce.catalog.TestJwtSupport.ANONYMOUS;
+import static com.polyglotcommerce.catalog.TestJwtSupport.CUSTOMER;
+import static com.polyglotcommerce.catalog.TestJwtSupport.as;
+
 @Testcontainers
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Import(TestJwtSupport.class)
 class ProductApiIntegrationTest {
 
     @Container
@@ -72,8 +80,8 @@ class ProductApiIntegrationTest {
         ProductRequest createRequest = new ProductRequest("Wireless Mouse", "Ergonomic mouse",
                 new BigDecimal("29.90"), "SKU-001", catId);
 
-        ResponseEntity<ProductResponse> createResponse =
-                restTemplate.postForEntity("/api/products", createRequest, ProductResponse.class);
+        ResponseEntity<ProductResponse> createResponse = restTemplate.exchange(
+                "/api/products", HttpMethod.POST, as(ADMIN, createRequest), ProductResponse.class);
 
         assertThat(createResponse.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         Long productId = createResponse.getBody().getId();
@@ -90,13 +98,15 @@ class ProductApiIntegrationTest {
 
         ProductRequest updateRequest = new ProductRequest("Wireless Mouse", "Ergonomic mouse",
                 new BigDecimal("24.90"), "SKU-001", catId);
-        restTemplate.put("/api/products/" + productId, updateRequest);
+        restTemplate.exchange("/api/products/" + productId, HttpMethod.PUT,
+                as(ADMIN, updateRequest), ProductResponse.class);
 
         ResponseEntity<ProductResponse> updatedResponse =
                 restTemplate.getForEntity("/api/products/" + productId, ProductResponse.class);
         assertThat(updatedResponse.getBody().getPrice()).isEqualByComparingTo("24.90");
 
-        restTemplate.delete("/api/products/" + productId);
+        restTemplate.exchange("/api/products/" + productId, HttpMethod.DELETE,
+                as(ADMIN), Void.class);
 
         ResponseEntity<ProductResponse> deletedResponse =
                 restTemplate.getForEntity("/api/products/" + productId, ProductResponse.class);
@@ -110,5 +120,37 @@ class ProductApiIntegrationTest {
         ResponseEntity<Object[]> response = restTemplate.getForEntity("/api/categories", Object[].class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotEmpty();
+    }
+
+    @Test
+    void catalogIsReadableWithoutLogin() {
+        // La vetrina resta pubblica: senza questo, il sito non mostrerebbe
+        // nulla a chi non ha ancora un account.
+        assertThat(restTemplate.exchange("/api/products", HttpMethod.GET, as(ANONYMOUS), ProductResponse[].class)
+                .getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(restTemplate.exchange("/api/categories", HttpMethod.GET, as(ANONYMOUS), Object[].class)
+                .getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    void writingToTheCatalogRequiresAuthentication() {
+        ProductRequest request = new ProductRequest("Hacked Product", "No token",
+                new BigDecimal("1.00"), "SKU-ANON", ensureCategory());
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                "/api/products", HttpMethod.POST, as(ANONYMOUS, request), String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void writingToTheCatalogRequiresTheAdminRole() {
+        ProductRequest request = new ProductRequest("Customer Product", "Wrong role",
+                new BigDecimal("1.00"), "SKU-CUST", ensureCategory());
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                "/api/products", HttpMethod.POST, as(CUSTOMER, request), String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     }
 }

@@ -14,6 +14,14 @@ spring:
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Keycloak (docker-compose). Il servizio scarica da qui le chiavi
+          # pubbliche con cui verifica la firma dei token: non c'e' nessun
+          # segreto condiviso con l'identity provider.
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/polyglot-commerce}
   datasource:
     url: jdbc:postgresql://${ORDERS_DB_HOST:localhost}:${ORDERS_DB_PORT:5435}/${ORDERS_DB_NAME:orders}
     username: ${ORDERS_DB_USER:orders}

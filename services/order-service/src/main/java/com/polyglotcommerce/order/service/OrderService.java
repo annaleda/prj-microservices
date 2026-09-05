@@ -13,9 +13,11 @@ import com.polyglotcommerce.order.model.Order;
 import com.polyglotcommerce.order.model.OrderItem;
 import com.polyglotcommerce.order.model.OrderStatus;
 import com.polyglotcommerce.order.repository.OrderRepository;
+import com.polyglotcommerce.order.security.Caller;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,22 +39,38 @@ public class OrderService {
         this.eventPublisher = eventPublisher;
     }
 
+    /**
+     * Chi e' personale interno vede tutti gli ordini, un cliente solo i
+     * propri: il filtro e' sui dati, non sull'URL, quindi non puo' stare
+     * nella configurazione di sicurezza.
+     */
     @Transactional(readOnly = true)
-    public List<OrderResponse> findAll() {
-        return orderRepository.findAll().stream()
+    public List<OrderResponse> findAllFor(Caller caller) {
+        List<Order> orders = caller.isStaff()
+                ? orderRepository.findAll()
+                : orderRepository.findByCustomerEmail(caller.getEmail());
+
+        return orders.stream()
                 .map(OrderResponse::fromEntity)
                 .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
-    public OrderResponse findById(Long id) {
-        return OrderResponse.fromEntity(getOrderOrThrow(id));
+    public OrderResponse findByIdFor(Long id, Caller caller) {
+        Order order = getOrderOrThrow(id);
+
+        if (!caller.isStaff() && !order.getCustomerEmail().equals(caller.getEmail())) {
+            // 403 e non 404: l'ordine esiste, semplicemente non e' suo.
+            throw new AccessDeniedException("Order " + id + " belongs to another customer");
+        }
+
+        return OrderResponse.fromEntity(order);
     }
 
     @Transactional
-    public OrderResponse create(OrderRequest request) {
+    public OrderResponse create(OrderRequest request, Caller caller) {
         Order order = Order.builder()
-                .customerEmail(request.getCustomerEmail())
+                .customerEmail(caller.getEmail())
                 .status(OrderStatus.CREATED)
                 .totalAmount(BigDecimal.ZERO)
                 .build();

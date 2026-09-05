@@ -92,6 +92,13 @@ Kubernetes; - espone metriche, log e tracing.
 Responsabilità: profili utenti, ruoli, autorizzazioni applicative e
 integrazione con Keycloak.
 
+*Stato*: non implementato. Identità, credenziali e ruoli sono gestiti
+direttamente da Keycloak (che usa `auth-db` come proprio database), e
+ogni servizio applica da sé le proprie autorizzazioni leggendo i ruoli
+dal token. Questo servizio serve quando ci saranno dati di profilo
+applicativi da custodire — indirizzi di spedizione, preferenze,
+consensi — che non hanno senso dentro l'identity provider.
+
 ### Catalog Service
 
 **Stack:** Java, Spring Boot, Spring Data JPA, PostgreSQL.
@@ -295,6 +302,34 @@ Comunicazione service-to-service: i servizi interni si autenticano tra
 loro tramite **OAuth2 Client Credentials Grant** verso Keycloak,
 ottenendo un token applicativo dedicato (distinto dal token utente)
 per ogni chiamata sincrona tra microservizi.
+
+I frontend sono **client pubblici con PKCE**: girano nel browser e non
+possono custodire un segreto. I servizi sono *resource server*: non
+vedono mai le credenziali, verificano la firma del token con le chiavi
+pubbliche del realm (JWKS) e leggono i ruoli da `realm_access.roles`.
+
+Autorizzazioni per servizio:
+
+| Operazione | Chi |
+|---|---|
+| Sfogliare catalogo e categorie | chiunque, anche senza login |
+| Modificare il catalogo | ADMIN |
+| Creare e rileggere i propri ordini | CUSTOMER |
+| Vedere gli ordini di tutti | ADMIN, SUPPORT |
+| Cambiare a mano lo stato di un ordine | ADMIN |
+| Creare pagamenti da back office | ADMIN |
+| Leggere i pagamenti | ADMIN, SUPPORT |
+| Leggere le scorte | qualunque utente autenticato |
+| Muovere scorte e prenotazioni | WAREHOUSE, ADMIN |
+
+Un ordine e' intestato a chi presenta il token: l'email non viaggia piu'
+nella richiesta, e un cliente che chiede l'ordine di un altro riceve 403
+(non 404: l'ordine esiste, semplicemente non e' suo).
+
+Nota sul confine: questi controlli valgono sulle API HTTP. I passi della
+saga viaggiano su Kafka e non attraversano i filtri di sicurezza HTTP;
+il broker e' considerato rete interna. Proteggerlo (SASL/mTLS) e' un
+tema a se'.
 
 ## 10. Docker e Kubernetes
 

@@ -8,8 +8,10 @@ import com.polyglotcommerce.order.dto.OrderStatusUpdateRequest;
 import com.polyglotcommerce.order.model.OrderStatus;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -26,8 +28,16 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import static com.polyglotcommerce.order.TestJwtSupport.ADMIN;
+import static com.polyglotcommerce.order.TestJwtSupport.ANONYMOUS;
+import static com.polyglotcommerce.order.TestJwtSupport.CUSTOMER;
+import static com.polyglotcommerce.order.TestJwtSupport.OTHER_CUSTOMER;
+import static com.polyglotcommerce.order.TestJwtSupport.SUPPORT;
+import static com.polyglotcommerce.order.TestJwtSupport.as;
+
 @Testcontainers
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Import(TestJwtSupport.class)
 class OrderApiIntegrationTest {
 
     @Container
@@ -54,28 +64,35 @@ class OrderApiIntegrationTest {
 
     private OrderRequest sampleOrderRequest() {
         OrderItemRequest item = new OrderItemRequest(1L, "Wireless Mouse", 2, new BigDecimal("29.90"));
-        return new OrderRequest("customer@example.com", List.of(item));
+        return new OrderRequest(List.of(item));
+    }
+
+    /** Crea un ordine per conto del cliente indicato dal token. */
+    private OrderResponse createOrderAs(String token) {
+        ResponseEntity<OrderResponse> response = restTemplate.exchange(
+                "/api/orders", HttpMethod.POST, as(token, sampleOrderRequest()), OrderResponse.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        return response.getBody();
     }
 
     @Test
     void createAndReadOrder() {
-        ResponseEntity<OrderResponse> createResponse =
-                restTemplate.postForEntity("/api/orders", sampleOrderRequest(), OrderResponse.class);
+        OrderResponse created = createOrderAs(CUSTOMER);
 
-        assertThat(createResponse.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        OrderResponse created = createResponse.getBody();
         assertThat(created.getId()).isNotNull();
         assertThat(created.getStatus()).isEqualTo(OrderStatus.CREATED);
         assertThat(created.getTotalAmount()).isEqualByComparingTo("59.80");
         assertThat(created.getItems()).hasSize(1);
+        // L'intestatario viene dal token, non dalla richiesta.
+        assertThat(created.getCustomerEmail()).isEqualTo("customer@example.com");
 
-        ResponseEntity<OrderResponse> getResponse =
-                restTemplate.getForEntity("/api/orders/" + created.getId(), OrderResponse.class);
+        ResponseEntity<OrderResponse> getResponse = restTemplate.exchange(
+                "/api/orders/" + created.getId(), HttpMethod.GET, as(CUSTOMER), OrderResponse.class);
         assertThat(getResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(getResponse.getBody().getCustomerEmail()).isEqualTo("customer@example.com");
 
-        ResponseEntity<OrderResponse[]> listResponse =
-                restTemplate.getForEntity("/api/orders", OrderResponse[].class);
+        ResponseEntity<OrderResponse[]> listResponse = restTemplate.exchange(
+                "/api/orders", HttpMethod.GET, as(CUSTOMER), OrderResponse[].class);
         assertThat(listResponse.getBody()).extracting(OrderResponse::getId).contains(created.getId());
     }
 
@@ -84,44 +101,42 @@ class OrderApiIntegrationTest {
         // Il body di errore (ApiError) ha un campo "status" numerico che
         // andrebbe in conflitto con l'enum OrderStatus se deserializzato
         // come OrderResponse: qui interessa solo il codice HTTP.
-        ResponseEntity<String> response =
-                restTemplate.getForEntity("/api/orders/999999", String.class);
+        ResponseEntity<String> response = restTemplate.exchange(
+                "/api/orders/999999", HttpMethod.GET, as(CUSTOMER), String.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
     @Test
     void updateStatusLifecycleAndRejectAfterCancellation() {
-        OrderResponse created = restTemplate.postForEntity("/api/orders", sampleOrderRequest(), OrderResponse.class)
-                .getBody();
+        OrderResponse created = createOrderAs(CUSTOMER);
 
         ResponseEntity<OrderResponse> confirmResponse = restTemplate.exchange(
                 "/api/orders/" + created.getId() + "/status",
-                org.springframework.http.HttpMethod.PATCH,
-                new org.springframework.http.HttpEntity<>(new OrderStatusUpdateRequest(OrderStatus.CONFIRMED)),
+                HttpMethod.PATCH,
+                as(ADMIN, new OrderStatusUpdateRequest(OrderStatus.CONFIRMED)),
                 OrderResponse.class);
         assertThat(confirmResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(confirmResponse.getBody().getStatus()).isEqualTo(OrderStatus.CONFIRMED);
 
         ResponseEntity<OrderResponse> cancelResponse = restTemplate.exchange(
                 "/api/orders/" + created.getId() + "/status",
-                org.springframework.http.HttpMethod.PATCH,
-                new org.springframework.http.HttpEntity<>(new OrderStatusUpdateRequest(OrderStatus.CANCELLED)),
+                HttpMethod.PATCH,
+                as(ADMIN, new OrderStatusUpdateRequest(OrderStatus.CANCELLED)),
                 OrderResponse.class);
         assertThat(cancelResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(cancelResponse.getBody().getStatus()).isEqualTo(OrderStatus.CANCELLED);
 
         ResponseEntity<String> rejectedResponse = restTemplate.exchange(
                 "/api/orders/" + created.getId() + "/status",
-                org.springframework.http.HttpMethod.PATCH,
-                new org.springframework.http.HttpEntity<>(new OrderStatusUpdateRequest(OrderStatus.CONFIRMED)),
+                HttpMethod.PATCH,
+                as(ADMIN, new OrderStatusUpdateRequest(OrderStatus.CONFIRMED)),
                 String.class);
         assertThat(rejectedResponse.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
     }
 
     @Test
     void creatingAnOrderPublishesOrderCreated() {
-        OrderResponse created = restTemplate.postForEntity("/api/orders", sampleOrderRequest(), OrderResponse.class)
-                .getBody();
+        OrderResponse created = createOrderAs(CUSTOMER);
 
         JsonNode envelope = KafkaTestSupport.awaitEvent(
                 kafka.getBootstrapServers(), "order.created", created.getId(), Duration.ofSeconds(20));
@@ -140,8 +155,7 @@ class OrderApiIntegrationTest {
 
     @Test
     void sagaOutcomeConfirmsTheOrder() {
-        OrderResponse created = restTemplate.postForEntity("/api/orders", sampleOrderRequest(), OrderResponse.class)
-                .getBody();
+        OrderResponse created = createOrderAs(CUSTOMER);
 
         // L'esito della saga arriva dall'Integration Service: qui lo si
         // simula pubblicando direttamente l'evento sul topic.
@@ -149,20 +163,19 @@ class OrderApiIntegrationTest {
                 KafkaTestSupport.envelope("ORDER_UPDATED", "test-correlation",
                         "{\"orderId\":" + created.getId() + ",\"status\":\"CONFIRMED\"}"));
 
-        await(() -> restTemplate.getForObject("/api/orders/" + created.getId(), OrderResponse.class)
+        await(() -> readOrder(created.getId())
                 .getStatus() == OrderStatus.CONFIRMED);
     }
 
     @Test
     void sagaOutcomeIsIdempotentOnACancelledOrder() {
-        OrderResponse created = restTemplate.postForEntity("/api/orders", sampleOrderRequest(), OrderResponse.class)
-                .getBody();
+        OrderResponse created = createOrderAs(CUSTOMER);
 
         KafkaTestSupport.send(kafka.getBootstrapServers(), "order.cancelled", String.valueOf(created.getId()),
                 KafkaTestSupport.envelope("ORDER_CANCELLED", "test-correlation",
                         "{\"orderId\":" + created.getId() + ",\"reason\":\"Payment failed\"}"));
 
-        await(() -> restTemplate.getForObject("/api/orders/" + created.getId(), OrderResponse.class)
+        await(() -> readOrder(created.getId())
                 .getStatus() == OrderStatus.CANCELLED);
 
         // Ri-consegna dello stesso evento: nessuna eccezione, nessun cambio
@@ -171,8 +184,14 @@ class OrderApiIntegrationTest {
                 KafkaTestSupport.envelope("ORDER_CANCELLED", "test-correlation",
                         "{\"orderId\":" + created.getId() + ",\"reason\":\"Payment failed\"}"));
 
-        assertThat(restTemplate.getForObject("/api/orders/" + created.getId(), OrderResponse.class).getStatus())
+        assertThat(readOrder(created.getId()).getStatus())
                 .isEqualTo(OrderStatus.CANCELLED);
+    }
+
+    /** Rilegge un ordine come il cliente che lo ha creato. */
+    private OrderResponse readOrder(Long id) {
+        return restTemplate.exchange("/api/orders/" + id, HttpMethod.GET, as(CUSTOMER), OrderResponse.class)
+                .getBody();
     }
 
     /** Attesa attiva su una condizione che dipende da un consumer asincrono. */
@@ -190,5 +209,59 @@ class OrderApiIntegrationTest {
             }
         }
         throw new AssertionError("Condition not met within 20s");
+    }
+
+    @Test
+    void ordersRequireAuthentication() {
+        assertThat(restTemplate.exchange("/api/orders", HttpMethod.GET, as(ANONYMOUS), String.class)
+                .getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(restTemplate.exchange("/api/orders", HttpMethod.POST, as(ANONYMOUS, sampleOrderRequest()),
+                String.class).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void aCustomerCannotReadSomeoneElsesOrder() {
+        OrderResponse created = createOrderAs(CUSTOMER);
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                "/api/orders/" + created.getId(), HttpMethod.GET, as(OTHER_CUSTOMER), String.class);
+
+        // 403 e non 404: l'ordine esiste, ma non e' suo.
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void aCustomerOnlySeesTheirOwnOrders() {
+        OrderResponse mine = createOrderAs(CUSTOMER);
+        OrderResponse theirs = createOrderAs(OTHER_CUSTOMER);
+
+        List<Long> visibleToOther = List.of(restTemplate.exchange(
+                        "/api/orders", HttpMethod.GET, as(OTHER_CUSTOMER), OrderResponse[].class).getBody())
+                .stream().map(OrderResponse::getId).collect(java.util.stream.Collectors.toList());
+
+        assertThat(visibleToOther).contains(theirs.getId()).doesNotContain(mine.getId());
+    }
+
+    @Test
+    void supportSeesEveryOrder() {
+        OrderResponse mine = createOrderAs(CUSTOMER);
+        OrderResponse theirs = createOrderAs(OTHER_CUSTOMER);
+
+        ResponseEntity<OrderResponse[]> response = restTemplate.exchange(
+                "/api/orders", HttpMethod.GET, as(SUPPORT), OrderResponse[].class);
+
+        assertThat(response.getBody()).extracting(OrderResponse::getId)
+                .contains(mine.getId(), theirs.getId());
+    }
+
+    @Test
+    void changingStatusByHandIsReservedToAdmins() {
+        OrderResponse created = createOrderAs(CUSTOMER);
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                "/api/orders/" + created.getId() + "/status", HttpMethod.PATCH,
+                as(CUSTOMER, new OrderStatusUpdateRequest(OrderStatus.CONFIRMED)), String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     }
 }

@@ -5,8 +5,8 @@ export interface OrderItemInput {
   unitPrice: number;
 }
 
+/** L'intestatario non si dichiara piu': lo ricava il backend dal token. */
 export interface OrderRequest {
-  customerEmail: string;
   items: OrderItemInput[];
 }
 
