@@ -1,32 +1,6 @@
-import os
-
-import pytest
-from testcontainers.postgres import PostgresContainer
-
-
-@pytest.fixture(scope="module")
-def postgres_container():
-    with PostgresContainer("postgres:16-alpine", dbname="inventory", username="inventory", password="inventory") as postgres:
-        yield postgres
-
-
-@pytest.fixture(scope="module")
-def client(postgres_container):
-    os.environ["INVENTORY_DB_HOST"] = postgres_container.get_container_host_ip()
-    os.environ["INVENTORY_DB_PORT"] = postgres_container.get_exposed_port(5432)
-    os.environ["INVENTORY_DB_NAME"] = "inventory"
-    os.environ["INVENTORY_DB_USER"] = "inventory"
-    os.environ["INVENTORY_DB_PASSWORD"] = "inventory"
-
-    # Import ritardato: app.database legge le variabili d'ambiente al
-    # momento dell'import per costruire l'engine SQLAlchemy, quindi deve
-    # avvenire dopo aver puntato le env var al container di test.
-    from fastapi.testclient import TestClient
-
-    from app.main import app
-
-    with TestClient(app) as test_client:
-        yield test_client
+"""Test delle API REST. I container Postgres/Kafka e la fixture `client`
+stanno in conftest.py, condivisi con i test della saga.
+"""
 
 
 def test_get_inventory_seeded(client):

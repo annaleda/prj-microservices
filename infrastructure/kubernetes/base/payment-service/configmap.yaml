@@ -7,3 +7,4 @@ data:
   PAYMENTS_DB_HOST: payments-db
   PAYMENTS_DB_PORT: "5432"
   PAYMENTS_DB_NAME: payments
+  KAFKA_BOOTSTRAP_SERVERS: kafka:9092

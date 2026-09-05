@@ -525,3 +525,130 @@ orders/inventory/payments.
 **Prossimo passo naturale**: provare per davvero il deploy su un
 cluster kind dedicato (proposta ancora in sospeso), oppure Integration
 Service (Camel) per la saga.
+
+## 2026-09-05
+
+### 14. Saga Orchestration: Integration Service (Camel) e collegamento di Order/Inventory/Payment a Kafka
+
+Ripresa del lavoro dopo la sessione del 2026-08-28. Kafka esisteva come
+infrastruttura (broker + topic) ma nessun servizio ci pubblicava o
+consumava nulla: la Saga Orchestration, cuore del documento di design,
+era solo un TODO annotato nel codice di Order/Inventory/Payment. Scelto
+dall'utente, tra quattro opzioni, di chiudere proprio questo pezzo.
+
+**Contraddizione trovata nel documento di design e risolta**: la
+sezione "Saga Orchestration" diceva che l'Integration Service *invoca
+via REST* l'Inventory Service, mentre la scheda dell'Inventory Service
+elencava `order.created` tra gli eventi che consuma. Scelta la versione
+**interamente a eventi** (Inventory consuma `order.created`), coerente
+con il principio "Event First" e con l'event catalog gia' definito, e
+aggiornata di conseguenza la sezione del documento.
+
+**Flusso implementato** (nessun topic nuovo tranne una DLQ):
+
+| Servizio | Consuma | Pubblica |
+|---|---|---|
+| Order | `order.updated`, `order.cancelled` | `order.created` |
+| Inventory | `order.created`, `order.cancelled` | `inventory.reserved` / `rejected` / `released` |
+| Payment | `payment.requested` | `payment.completed` / `payment.failed` |
+| Integration (orchestratore) | tutti gli esiti | `payment.requested`, `order.updated`, `order.cancelled` |
+
+La compensazione non ha un evento dedicato: `order.cancelled` e' anche
+il segnale che fa rilasciare le scorte all'Inventory Service.
+
+**Integration Service** (nuovo, `services/integration-service/`, porta
+8085): Spring Boot 2.7 + **Camel 3.22.2** (ultima serie compatibile con
+Spring Boot 2.7/Java 11; Camel 4 richiede Boot 3). Cinque rotte tutte
+della stessa forma - consuma un evento, chiedi all'orchestratore il
+passo successivo, pubblicalo - con la logica di coordinamento isolata
+in `SagaOrchestrator`, che non conosce Camel. Lo stato delle saghe in
+corso e' in memoria (`SagaStateStore`): serve perche' `inventory.reserved`
+non trasporta l'importo da pagare, che sta solo in `order.created`. Il
+limite e' dichiarato nel codice e nel documento; il Deployment
+Kubernetes ha percio' **una sola replica**, altrimenti i passi della
+stessa saga finirebbero su pod che non condividono quello stato.
+
+**Dettagli non ovvi degli altri tre servizi**:
+- *Order Service*: l'evento `order.created` viene pubblicato **dopo il
+  commit** (`@TransactionalEventListener(AFTER_COMMIT)`), non dentro la
+  transazione: altrimenti si annuncerebbe un ordine che un rollback
+  puo' far sparire, o che i consumer vedrebbero prima che sia leggibile
+  dal database. Annotato che la soluzione completa sarebbe il pattern
+  Transactional Outbox.
+- *Payment Service*: consumo idempotente sull'ordine - se un pagamento
+  per quell'ordine esiste gia', non riaddebita ma **ripubblica l'esito**
+  (l'orchestratore potrebbe non aver visto il primo).
+- *Inventory Service*: aggiunta la colonna `reservations.order_id`, che
+  serve alla compensazione (rilasciare tutte le prenotazioni di un
+  ordine) e alla verifica di idempotenza. `create_all` non altera
+  tabelle esistenti, quindi c'e' un `ALTER TABLE ... ADD COLUMN IF NOT
+  EXISTS` all'avvio, dichiarato come sostituto di uno strumento di
+  migrazione (Alembic) non ancora presente. Il consumer usa
+  **confluent-kafka** su un thread dedicato, non asyncio, perche'
+  l'accesso al DB (SQLAlchemy) e' sincrono e bloccherebbe il loop di
+  FastAPI. Con `EVENTS_ENABLED=false` il servizio resta sola API REST.
+
+**Bug reale trovato e corretto (test dell'Integration Service tutti
+falliti, 500 secondi)**: l'error handler Camel era
+`deadLetterChannel("kafka:saga.dlq")`. Camel avvolge con l'error
+handler **ogni singolo processore di ogni rotta**, quindi all'avvio
+nascevano una quarantina di producer Kafka verso la DLQ (46 nei log),
+tutti fermi in `INIT_PRODUCER_ID`: il broker non rispondeva piu' e i
+consumer non riuscivano nemmeno a entrare nel consumer group. **Fix**:
+la DLQ punta a un endpoint `direct:saga-dlq`, e una singola rotta
+inoltra da li' a Kafka - un solo producer. Test da 5 falliti in 500s a
+5 verdi in 51s, producer da 46 a 14.
+
+**Frontend (Customer Web)**: il checkout creava l'ordine e poi chiamava
+lui stesso `POST /api/payments`; con la saga attiva sarebbe nato un
+secondo pagamento. Ora crea solo l'ordine e ne attende l'esito
+rileggendolo finche' non esce da `CREATED` (`awaitSagaOutcome`),
+mostrando "confermato" o "annullato". Rimossi `payment.service.ts` e
+`payment.model.ts`, non piu' usati da nessuno.
+
+**Test aggiunti**, tutti contro Kafka reale (Testcontainers), nessun
+mock: Order 6/6, Payment 6/6, Integration 5/5, Inventory 9/9. Nei test
+Python i container sono passati a `conftest.py` e a scope di sessione:
+`app.database` costruisce l'engine all'import, quindi due file di test
+con container propri avrebbero puntato entrambi al database del primo.
+Corretto anche un test che sembrava verificare la ri-consegna ma
+poteva passare per caso (`await_event` rilegge il topic dall'inizio e
+restituiva lo stesso evento di prima): ora si attende un numero
+preciso di eventi.
+
+**Verifica end-to-end** con i quattro servizi avviati contro i DB e il
+Kafka reali - i contatori per topic combaciano esattamente con i tre
+scenari provati:
+
+| scenario | esito ordine | scorte |
+|---|---|---|
+| acquisto normale | CONFIRMED | 2 pezzi riservati |
+| importo oltre soglia (pagamento rifiutato) | CANCELLED | riservate e poi **rilasciate** |
+| quantita' superiore alle scorte | CANCELLED | invariate, nessun pagamento creato |
+
+`order.created` 3, `inventory.reserved` 2, `inventory.rejected` 1,
+`inventory.released` 1, `payment.requested` 2, `payment.completed` 1,
+`payment.failed` 1, `order.updated` 1, `order.cancelled` 2,
+**`saga.dlq` 0**.
+
+**Kubernetes**: aggiunti i manifest di `integration-service`
+(ConfigMap, Deployment a una replica, Service; **nessun HTTPRoute**, il
+servizio non espone API pubbliche) e `KAFKA_BOOTSTRAP_SERVERS` nei
+ConfigMap degli altri tre, con l'overlay `local` che lo fa puntare a
+`host.docker.internal:9094` - stesso schema gia' usato per i database.
+Come sempre finora, solo `kubectl kustomize` + `--dry-run=client`,
+nessun deploy.
+
+*Piccolo intoppo*: un em dash in un commento di `service.yaml` mandava
+in errore `kubectl kustomize` ("invalid trailing UTF-8 octet"); i
+manifest restano quindi in puro ASCII come gia' erano.
+
+Aggiornati [README.md](../README.md) (nuova sezione 3 con i tre
+scenari da provare, rinumerata la sezione Kubernetes da 3 a 4),
+`infrastructure/kafka/README.md` (tabella producer/consumer per topic)
+e il documento di design.
+
+**Prossimo passo naturale**: Keycloak/OAuth2 (Phase 4), per dare
+identita' reale ai clienti al posto dell'email libera nel checkout,
+oppure il deploy vero su un cluster kind dedicato - proposta ancora in
+sospeso da tre sessioni.

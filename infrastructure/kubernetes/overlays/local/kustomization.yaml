@@ -74,3 +74,35 @@ patches:
       - op: replace
         path: /data/PAYMENTS_DB_PORT
         value: "5436"
+  # Stesso discorso per Kafka: il broker gira su docker-compose sull'host
+  # ed espone la porta 9094 (listener HOST), non essendoci ancora un Kafka
+  # dentro il cluster. integration-service resta a una replica anche qui,
+  # come nel base.
+  - target:
+      kind: ConfigMap
+      name: order-service-config
+    patch: |-
+      - op: replace
+        path: /data/KAFKA_BOOTSTRAP_SERVERS
+        value: host.docker.internal:9094
+  - target:
+      kind: ConfigMap
+      name: inventory-service-config
+    patch: |-
+      - op: replace
+        path: /data/KAFKA_BOOTSTRAP_SERVERS
+        value: host.docker.internal:9094
+  - target:
+      kind: ConfigMap
+      name: payment-service-config
+    patch: |-
+      - op: replace
+        path: /data/KAFKA_BOOTSTRAP_SERVERS
+        value: host.docker.internal:9094
+  - target:
+      kind: ConfigMap
+      name: integration-service-config
+    patch: |-
+      - op: replace
+        path: /data/KAFKA_BOOTSTRAP_SERVERS
+        value: host.docker.internal:9094

@@ -1,6 +1,8 @@
 #!/bin/sh
-# Crea i topic dell'event catalog (documento di design, sezione 8),
-# idempotente: eseguito una volta ad ogni avvio dello stack, non fallisce
+# Crea i topic dell'event catalog (documento di design, sezione 8) piu'
+# saga.dlq, dove finiscono i messaggi che nessun consumer riesce a
+# processare dopo i tentativi previsti.
+# Idempotente: eseguito una volta ad ogni avvio dello stack, non fallisce
 # se i topic esistono gia'.
 set -e
 
@@ -19,6 +21,7 @@ payment.completed
 payment.failed
 notification.requested
 order.shipped
+saga.dlq
 "
 
 for topic in $TOPICS; do

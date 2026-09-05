@@ -7,3 +7,4 @@ resources:
   - order-service
   - inventory-service
   - payment-service
+  - integration-service

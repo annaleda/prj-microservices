@@ -20,7 +20,8 @@ docker compose up -d kafka kafka-init kafka-ui
 
 ## Topic
 
-Corrispondono all'event catalog del documento di design (sezione 8):
+Corrispondono all'event catalog del documento di design (sezione 8),
+piu' il topic tecnico `saga.dlq` (vedi in fondo):
 
 ```
 order.created
@@ -35,13 +36,34 @@ payment.completed
 payment.failed
 notification.requested
 order.shipped
+saga.dlq
 ```
 
-## Scope di questa fase
+## Chi produce e chi consuma
 
-Solo l'infrastruttura (broker + topic), **nessun producer/consumer è
-stato ancora collegato** nei microservizi esistenti (Order, Inventory,
-Payment): quel collegamento è la Saga Orchestration a carico
-dell'Integration Service (Apache Camel), non ancora implementato — per
-non anticipare logica applicativa senza il componente che la
-coordina.
+| Topic | Producer | Consumer |
+|---|---|---|
+| `order.created` | Order Service | Inventory Service, Integration Service |
+| `inventory.reserved` / `inventory.rejected` | Inventory Service | Integration Service |
+| `payment.requested` | Integration Service | Payment Service |
+| `payment.completed` / `payment.failed` | Payment Service | Integration Service |
+| `order.updated` / `order.cancelled` | Integration Service | Order Service, Inventory Service (compensazione) |
+| `inventory.released` | Inventory Service | — (per ora nessuno) |
+| `saga.dlq` | tutti i consumer | — (ispezione manuale) |
+
+L'orchestrazione e' descritta nella sezione "Saga Orchestration" del
+documento di design; per provarla in locale vedi la sezione 3 del
+[README](../../README.md) alla radice del repository.
+
+I topic rimasti senza traffico (`inventory.updated`,
+`notification.requested`, `order.shipped`) appartengono a servizi non
+ancora implementati (Notification, Analytics): sono creati perche'
+fanno parte dell'event catalog del documento di design.
+
+## Dead letter queue
+
+`saga.dlq` non e' un evento di dominio: e' dove finisce un messaggio
+che un consumer non riesce a processare dopo i tentativi previsti
+(tre, a un secondo di distanza). Senza, un messaggio malformato
+bloccherebbe la partizione riproponendosi all'infinito. In condizioni
+normali il topic resta vuoto.

@@ -3,32 +3,38 @@ package com.polyglotcommerce.order.service;
 import com.polyglotcommerce.order.dto.OrderItemRequest;
 import com.polyglotcommerce.order.dto.OrderRequest;
 import com.polyglotcommerce.order.dto.OrderResponse;
+import com.polyglotcommerce.order.event.EventEnvelope;
+import com.polyglotcommerce.order.event.EventTopics;
+import com.polyglotcommerce.order.event.OutboundEvent;
+import com.polyglotcommerce.order.event.payload.OrderCreatedPayload;
 import com.polyglotcommerce.order.exception.InvalidOrderStatusTransitionException;
 import com.polyglotcommerce.order.exception.ResourceNotFoundException;
 import com.polyglotcommerce.order.model.Order;
 import com.polyglotcommerce.order.model.OrderItem;
 import com.polyglotcommerce.order.model.OrderStatus;
 import com.polyglotcommerce.order.repository.OrderRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
-// Nota: il documento di design prevede che la creazione di un ordine
-// pubblichi l'evento order.created, che innesca la saga orchestrata
-// dall'Integration Service (Order -> Inventory -> Payment). Kafka non
-// e' ancora presente nel progetto (Phase 3 della roadmap): per ora
-// l'ordine viene semplicemente persistito con stato CREATED, senza
-// alcuna pubblicazione di eventi.
 @Service
 public class OrderService {
 
-    private final OrderRepository orderRepository;
+    private static final Logger log = LoggerFactory.getLogger(OrderService.class);
 
-    public OrderService(OrderRepository orderRepository) {
+    private final OrderRepository orderRepository;
+    private final ApplicationEventPublisher eventPublisher;
+
+    public OrderService(OrderRepository orderRepository, ApplicationEventPublisher eventPublisher) {
         this.orderRepository = orderRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional(readOnly = true)
@@ -63,9 +69,17 @@ public class OrderService {
         }
         order.setTotalAmount(computeTotal(order.getItems()));
 
-        return OrderResponse.fromEntity(orderRepository.save(order));
+        Order saved = orderRepository.save(order);
+        publishOrderCreated(saved);
+
+        return OrderResponse.fromEntity(saved);
     }
 
+    /**
+     * Cambio di stato richiesto esplicitamente via API (PATCH).
+     * L'esito della saga arriva invece per evento, vedi
+     * {@link #applyStatusFromSaga}.
+     */
     @Transactional
     public OrderResponse updateStatus(Long id, OrderStatus newStatus) {
         Order order = getOrderOrThrow(id);
@@ -77,6 +91,58 @@ public class OrderService {
 
         order.setStatus(newStatus);
         return OrderResponse.fromEntity(orderRepository.save(order));
+    }
+
+    /**
+     * Allinea l'ordine all'esito deciso dalla saga (Integration Service).
+     *
+     * A differenza di {@link #updateStatus} non solleva eccezioni: un
+     * consumer Kafka che fallisse su una transizione non valida rimetterebbe
+     * in coda lo stesso messaggio all'infinito (o lo manderebbe in DLQ) per
+     * una situazione che invece e' del tutto normale, cioe' la ri-consegna
+     * di un evento gia' applicato. L'operazione e' quindi idempotente.
+     */
+    @Transactional
+    public void applyStatusFromSaga(Long orderId, OrderStatus newStatus) {
+        Order order = orderRepository.findById(orderId).orElse(null);
+        if (order == null) {
+            log.warn("Saga outcome for unknown order {}: ignored", orderId);
+            return;
+        }
+        if (order.getStatus() == newStatus) {
+            return;
+        }
+        if (order.getStatus() == OrderStatus.CANCELLED) {
+            log.warn("Order {} is already cancelled: outcome {} ignored", orderId, newStatus);
+            return;
+        }
+
+        order.setStatus(newStatus);
+        orderRepository.save(order);
+    }
+
+    private void publishOrderCreated(Order order) {
+        OrderCreatedPayload payload = OrderCreatedPayload.builder()
+                .orderId(order.getId())
+                .customerEmail(order.getCustomerEmail())
+                .totalAmount(order.getTotalAmount())
+                .items(order.getItems().stream()
+                        .map(item -> OrderCreatedPayload.Item.builder()
+                                .productId(item.getProductId())
+                                .quantity(item.getQuantity())
+                                .unitPrice(item.getUnitPrice())
+                                .build())
+                        .collect(Collectors.toList()))
+                .build();
+
+        // Un correlationId nuovo per ogni ordine: viene propagato invariato
+        // da tutti gli eventi successivi della saga, cosi' l'intero flusso
+        // e' ricostruibile dai log dei vari servizi.
+        EventEnvelope<OrderCreatedPayload> envelope =
+                EventEnvelope.of("ORDER_CREATED", UUID.randomUUID().toString(), payload);
+
+        eventPublisher.publishEvent(
+                new OutboundEvent(EventTopics.ORDER_CREATED, String.valueOf(order.getId()), envelope));
     }
 
     private Order getOrderOrThrow(Long id) {

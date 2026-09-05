@@ -1,5 +1,6 @@
 package com.polyglotcommerce.order;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.polyglotcommerce.order.dto.OrderItemRequest;
 import com.polyglotcommerce.order.dto.OrderRequest;
 import com.polyglotcommerce.order.dto.OrderResponse;
@@ -13,11 +14,14 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,11 +36,17 @@ class OrderApiIntegrationTest {
             .withUsername("orders")
             .withPassword("orders");
 
+    // Il servizio pubblica order.created e consuma gli esiti della saga:
+    // serve un broker vero, non un mock, come gia' per il database.
+    @Container
+    static KafkaContainer kafka = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.4.0"));
+
     @DynamicPropertySource
-    static void datasourceProperties(DynamicPropertyRegistry registry) {
+    static void serviceProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
+        registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
     }
 
     @Autowired
@@ -106,5 +116,79 @@ class OrderApiIntegrationTest {
                 new org.springframework.http.HttpEntity<>(new OrderStatusUpdateRequest(OrderStatus.CONFIRMED)),
                 String.class);
         assertThat(rejectedResponse.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    @Test
+    void creatingAnOrderPublishesOrderCreated() {
+        OrderResponse created = restTemplate.postForEntity("/api/orders", sampleOrderRequest(), OrderResponse.class)
+                .getBody();
+
+        JsonNode envelope = KafkaTestSupport.awaitEvent(
+                kafka.getBootstrapServers(), "order.created", created.getId(), Duration.ofSeconds(20));
+
+        assertThat(envelope.path("eventType").asText()).isEqualTo("ORDER_CREATED");
+        assertThat(envelope.path("source").asText()).isEqualTo("order-service");
+        assertThat(envelope.path("correlationId").asText()).isNotEmpty();
+
+        JsonNode data = envelope.path("data");
+        assertThat(data.path("customerEmail").asText()).isEqualTo("customer@example.com");
+        assertThat(new BigDecimal(data.path("totalAmount").asText())).isEqualByComparingTo("59.80");
+        assertThat(data.path("items")).hasSize(1);
+        assertThat(data.path("items").get(0).path("productId").asLong()).isEqualTo(1L);
+        assertThat(data.path("items").get(0).path("quantity").asInt()).isEqualTo(2);
+    }
+
+    @Test
+    void sagaOutcomeConfirmsTheOrder() {
+        OrderResponse created = restTemplate.postForEntity("/api/orders", sampleOrderRequest(), OrderResponse.class)
+                .getBody();
+
+        // L'esito della saga arriva dall'Integration Service: qui lo si
+        // simula pubblicando direttamente l'evento sul topic.
+        KafkaTestSupport.send(kafka.getBootstrapServers(), "order.updated", String.valueOf(created.getId()),
+                KafkaTestSupport.envelope("ORDER_UPDATED", "test-correlation",
+                        "{\"orderId\":" + created.getId() + ",\"status\":\"CONFIRMED\"}"));
+
+        await(() -> restTemplate.getForObject("/api/orders/" + created.getId(), OrderResponse.class)
+                .getStatus() == OrderStatus.CONFIRMED);
+    }
+
+    @Test
+    void sagaOutcomeIsIdempotentOnACancelledOrder() {
+        OrderResponse created = restTemplate.postForEntity("/api/orders", sampleOrderRequest(), OrderResponse.class)
+                .getBody();
+
+        KafkaTestSupport.send(kafka.getBootstrapServers(), "order.cancelled", String.valueOf(created.getId()),
+                KafkaTestSupport.envelope("ORDER_CANCELLED", "test-correlation",
+                        "{\"orderId\":" + created.getId() + ",\"reason\":\"Payment failed\"}"));
+
+        await(() -> restTemplate.getForObject("/api/orders/" + created.getId(), OrderResponse.class)
+                .getStatus() == OrderStatus.CANCELLED);
+
+        // Ri-consegna dello stesso evento: nessuna eccezione, nessun cambio
+        // di stato (un ordine annullato resta annullato).
+        KafkaTestSupport.send(kafka.getBootstrapServers(), "order.cancelled", String.valueOf(created.getId()),
+                KafkaTestSupport.envelope("ORDER_CANCELLED", "test-correlation",
+                        "{\"orderId\":" + created.getId() + ",\"reason\":\"Payment failed\"}"));
+
+        assertThat(restTemplate.getForObject("/api/orders/" + created.getId(), OrderResponse.class).getStatus())
+                .isEqualTo(OrderStatus.CANCELLED);
+    }
+
+    /** Attesa attiva su una condizione che dipende da un consumer asincrono. */
+    private void await(java.util.function.BooleanSupplier condition) {
+        long deadline = System.currentTimeMillis() + 20_000;
+        while (System.currentTimeMillis() < deadline) {
+            if (condition.getAsBoolean()) {
+                return;
+            }
+            try {
+                Thread.sleep(250);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            }
+        }
+        throw new AssertionError("Condition not met within 20s");
     }
 }

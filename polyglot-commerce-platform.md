@@ -228,6 +228,11 @@ notification.requested
 order.shipped
 ```
 
+A questi si aggiunge un topic tecnico, `saga.dlq`, dove finiscono i
+messaggi che un consumer non riesce a processare dopo i tentativi
+previsti: senza, un evento malformato bloccherebbe la partizione
+riproponendosi all'infinito.
+
 ### Event Envelope
 
 ``` json
@@ -248,22 +253,35 @@ Il flusso Order → Inventory → Payment è gestito come **saga
 orchestrata** dall'Integration Service (Apache Camel), non come pura
 coreografia:
 
-1. L'Integration Service consuma `order.created`.
-2. Invoca l'Inventory Service e attende `inventory.reserved` /
-   `inventory.rejected`.
-3. Se la riserva ha successo, richiede il pagamento pubblicando
-   `payment.requested` e attende `payment.completed` /
-   `payment.failed` dal Payment Service.
+1. L'Order Service pubblica `order.created`. L'Integration Service lo
+   consuma e apre la saga, conservandone lo stato (importo da
+   addebitare e `correlationId`, propagato poi a tutti gli eventi
+   successivi).
+2. L'Inventory Service consuma lo stesso `order.created`, prova a
+   riservare le scorte di tutti gli item (tutto-o-niente) e pubblica
+   `inventory.reserved` oppure `inventory.rejected`.
+3. Se la riserva ha successo, l'Integration Service richiede il
+   pagamento pubblicando `payment.requested` e attende
+   `payment.completed` / `payment.failed` dal Payment Service.
 4. In base all'esito complessivo pubblica `order.updated` (successo) o
-   `order.cancelled` (fallimento).
-5. In caso di fallimento in un punto qualsiasi della sequenza, esegue
-   le **compensazioni**: rilascio della riserva
-   (`inventory.released`) e, se il pagamento era già stato addebitato,
-   avvio del rimborso.
+   `order.cancelled` (fallimento); l'Order Service consuma questi
+   eventi e allinea lo stato dell'ordine.
+5. **Compensazione**: `order.cancelled` è anche il segnale che la
+   innesca — l'Inventory Service lo consuma e rilascia le prenotazioni
+   di quell'ordine, pubblicando `inventory.released`. Il rimborso non
+   serve nel percorso attuale, perché un pagamento rifiutato non
+   addebita nulla; servirebbe per fallimenti successivi all'addebito.
 
-Questo modello centralizza la logica di coordinamento e le
-compensazioni in un unico componente, mantenendo i servizi di dominio
-(Order, Inventory, Payment) semplici e privi di conoscenza reciproca.
+I servizi di dominio comunicano quindi solo per eventi e non si
+conoscono tra loro: è l'Integration Service a decidere quale passo
+segue quale, e quando compensare.
+
+Nota sullo stato: l'orchestratore tiene le saghe in corso in memoria.
+Al suo riavvio quelle ancora aperte perdono il contesto, e un
+`inventory.reserved` senza stato corrispondente viene trattato come
+fallimento (ordine annullato, scorte rilasciate) invece di lasciare
+ordine e scorte bloccati. Uno store persistente è l'evoluzione
+naturale.
 
 ## 9. Authentication & Authorization
 

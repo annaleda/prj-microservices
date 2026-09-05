@@ -1,0 +1,18 @@
+# Service interno al cluster: serve solo per health/probe e per un
+# eventuale accesso in port-forward. Non esiste un HTTPRoute perche'
+# l'Integration Service non espone API pubbliche - comunica unicamente
+# tramite eventi Kafka.
+apiVersion: v1
+kind: Service
+metadata:
+  name: integration-service
+  namespace: polyglot-commerce
+  labels:
+    app: integration-service
+spec:
+  selector:
+    app: integration-service
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8085

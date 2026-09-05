@@ -37,29 +37,22 @@
     </button>
   </ng-container>
 
-  <ng-container *ngIf="order && !payment">
-    <p>Ordine #{{ order.id }} creato — stato: {{ order.status }}.</p>
-    <p>Totale da pagare: {{ order.totalAmount | currency: 'EUR' }}</p>
+  <ng-container *ngIf="order">
+    <p>Ordine #{{ order.id }} — totale {{ order.totalAmount | currency: 'EUR' }}.</p>
 
-    <label>
-      Metodo di pagamento
-      <select [(ngModel)]="paymentMethod" name="paymentMethod">
-        <option value="CARD">Carta</option>
-        <option value="PAYPAL">PayPal</option>
-      </select>
-    </label>
-
-    <button (click)="pay()" [disabled]="submitting">Paga ora</button>
-  </ng-container>
-
-  <ng-container *ngIf="payment">
-    <p *ngIf="payment.status === 'COMPLETED'" class="checkout__success">
-      Pagamento completato — ID pagamento: {{ payment.id }}.
+    <p *ngIf="awaitingOutcome">
+      Ordine ricevuto: verifica delle scorte e pagamento in corso…
     </p>
-    <p *ngIf="payment.status === 'FAILED'" class="checkout__error">
-      Pagamento rifiutato.
+
+    <p *ngIf="order.status === 'CONFIRMED'" class="checkout__success">
+      Ordine confermato: scorte riservate e pagamento riuscito.
     </p>
-    <a routerLink="/">Torna al catalogo</a>
+    <p *ngIf="order.status === 'CANCELLED'" class="checkout__error">
+      Ordine annullato: scorte non disponibili oppure pagamento rifiutato.
+      Il carrello è rimasto invariato.
+    </p>
+
+    <a *ngIf="!awaitingOutcome" routerLink="/">Torna al catalogo</a>
   </ng-container>
 
   <p *ngIf="error" class="checkout__error">{{ error }}</p>

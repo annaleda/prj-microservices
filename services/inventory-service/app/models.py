@@ -18,4 +18,8 @@ class Reservation(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     product_id = Column(Integer, nullable=False)
     quantity = Column(Integer, nullable=False)
+    # Valorizzato solo per le prenotazioni nate da un evento order.created:
+    # serve alla compensazione della saga, che rilascia tutte le prenotazioni
+    # di un ordine annullato. Resta NULL per quelle create via API REST.
+    order_id = Column(Integer, nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

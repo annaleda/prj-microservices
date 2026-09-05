@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Settings Maven locali al progetto, usate con "mvn -s .mvn/settings.xml".
+  Il settings.xml globale della macchina punta a repository Nexus
+  interni aziendali, raggiungibili solo in VPN. Questo progetto e' un
+  demo indipendente e usa Maven Central direttamente, senza toccare la
+  configurazione Maven condivisa della macchina.
+-->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 http://maven.apache.org/xsd/settings-1.0.0.xsd">
+    <mirrors>
+        <mirror>
+            <id>central-direct</id>
+            <mirrorOf>*</mirrorOf>
+            <name>Maven Central (direct, bypass corporate Nexus)</name>
+            <url>https://repo.maven.apache.org/maven2</url>
+        </mirror>
+    </mirrors>
+</settings>

@@ -1,0 +1,24 @@
+server:
+  port: 8085
+
+spring:
+  application:
+    name: integration-service
+
+camel:
+  springboot:
+    name: integration-service
+  component:
+    kafka:
+      brokers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
