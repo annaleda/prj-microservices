@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getOrders } from '../api/ordersApi';
-import { CancellationReason, Order } from '../types/order';
+import { setStock } from '../api/inventoryApi';
+import { deleteOrder, getOrders } from '../api/ordersApi';
+import { PlusIcon, TrashIcon } from '../components/icons';
+import { CancellationReason, Order, OrderItem } from '../types/order';
 
 /** Etichetta italiana del motivo di annullamento deciso dalla saga. */
 function reasonLabel(reason: CancellationReason | null): string {
@@ -41,6 +43,11 @@ export default function OrderListPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [onlyFailed, setOnlyFailed] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  /** Articolo per cui e' aperto il campo del rifornimento. */
+  const [restocking, setRestocking] = useState<{ orderId: number; productId: number } | null>(null);
+  const [quantity, setQuantity] = useState(0);
 
   useEffect(() => {
     getOrders()
@@ -55,6 +62,45 @@ export default function OrderListPage() {
   );
 
   const visible = onlyFailed ? orders.filter((o) => o.status === 'CANCELLED') : orders;
+
+  const handleDelete = async (order: Order) => {
+    if (!confirm(`Eliminare l'ordine #${order.id}? L'operazione non si annulla.`)) {
+      return;
+    }
+    setBusy(true);
+    setNotice(null);
+    try {
+      await deleteOrder(order.id);
+      setOrders((previous) => previous.filter((o) => o.id !== order.id));
+      setNotice(`Ordine #${order.id} eliminato.`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openRestock = (order: Order, item: OrderItem) => {
+    setNotice(null);
+    setRestocking({ orderId: order.id, productId: item.productId });
+    // Parte dalla quantita' che era stata ordinata: e' il minimo che
+    // servirebbe per non far fallire di nuovo lo stesso ordine.
+    setQuantity(item.quantity);
+  };
+
+  const confirmRestock = async (item: OrderItem) => {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const updated = await setStock(item.productId, quantity);
+      setRestocking(null);
+      setNotice(`${item.productName}: scorte disponibili impostate a ${updated.quantityAvailable}.`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <section>
@@ -71,6 +117,7 @@ export default function OrderListPage() {
       </div>
 
       {error && <p className="error">{error}</p>}
+      {notice && <p className="notice">{notice}</p>}
 
       {loading ? (
         <p>Caricamento...</p>
@@ -86,6 +133,7 @@ export default function OrderListPage() {
               <th>Articoli</th>
               <th>Totale</th>
               <th>Stato</th>
+              <th />
             </tr>
           </thead>
           <tbody>
@@ -103,6 +151,42 @@ export default function OrderListPage() {
                     <div key={item.productId} className="order-item">
                       <span className="order-item__qty">{item.quantity}&times;</span>{' '}
                       {item.productName}
+                      {/* Il rifornimento si offre dove serve: un ordine perso
+                          per scorte esaurite dice esattamente quale prodotto
+                          rimettere a magazzino. */}
+                      {order.status === 'CANCELLED' &&
+                        order.cancellationReason === 'INVENTORY_REJECTED' &&
+                        (restocking?.orderId === order.id &&
+                        restocking?.productId === item.productId ? (
+                          <span className="restock">
+                            <input
+                              type="number"
+                              min={0}
+                              value={quantity}
+                              onChange={(e) => setQuantity(Number(e.target.value))}
+                            />
+                            <button
+                              className="icon-button icon-button--primary"
+                              disabled={busy}
+                              onClick={() => void confirmRestock(item)}
+                              title="Conferma le scorte"
+                              aria-label="Conferma le scorte"
+                            >
+                              <PlusIcon />
+                            </button>
+                            <button className="link-button" onClick={() => setRestocking(null)}>
+                              annulla
+                            </button>
+                          </span>
+                        ) : (
+                          <button
+                            className="link-button"
+                            onClick={() => openRestock(order, item)}
+                            title={`Rifornisci ${item.productName}`}
+                          >
+                            rifornisci
+                          </button>
+                        ))}
                     </div>
                   ))}
                 </td>
@@ -113,6 +197,21 @@ export default function OrderListPage() {
                   </span>
                   {order.status === 'CANCELLED' && (
                     <span className="status__reason">{reasonLabel(order.cancellationReason)}</span>
+                  )}
+                </td>
+                <td className="actions">
+                  {/* Solo gli ordini annullati si eliminano: uno confermato
+                      e' la traccia di una vendita avvenuta. */}
+                  {order.status === 'CANCELLED' && (
+                    <button
+                      className="icon-button icon-button--danger"
+                      disabled={busy}
+                      onClick={() => void handleDelete(order)}
+                      title={`Elimina l'ordine #${order.id}`}
+                      aria-label={`Elimina l'ordine #${order.id}`}
+                    >
+                      <TrashIcon />
+                    </button>
                   )}
                 </td>
               </tr>

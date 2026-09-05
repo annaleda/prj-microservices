@@ -10,6 +10,7 @@
     </p>
 
     <p *ngIf="error" class="orders__error">{{ error }}</p>
+    <p *ngIf="notice" class="orders__notice">{{ notice }}</p>
 
     <p *ngIf="auth.isLoggedIn && !error && orders.length === 0" class="orders__empty">
       Non hai ancora effettuato ordini. <a routerLink="/">Vai al catalogo</a>.
@@ -21,24 +22,82 @@
           <th>Ordine</th>
           <th>Data</th>
           <th>Articoli</th>
-          <th>Totale</th>
+          <th class="orders__numeric">Qtà</th>
+          <th class="orders__numeric">Totale</th>
           <th>Stato</th>
+          <th><span class="orders__sr-only">Azioni</span></th>
         </tr>
       </thead>
       <tbody>
         <tr *ngFor="let order of orders">
-          <td>#{{ order.id }}</td>
-          <td>{{ order.createdAt | date: 'dd/MM/yyyy HH:mm' }}</td>
           <td>
-            {{ itemCount(order) }}
-            <span class="orders__items">{{ order.items[0].productName }}<ng-container
-                *ngIf="order.items.length > 1"> e altri</ng-container></span>
+            <a class="orders__id" [routerLink]="['/orders', order.id]">#{{ order.id }}</a>
           </td>
-          <td>{{ order.totalAmount | currency: 'EUR' }}</td>
+          <td>{{ order.createdAt | date: 'dd/MM/yyyy HH:mm' }}</td>
+
+          <td>
+            <!-- Foto del primo articolo: in un elenco di numeri e date
+                 l'immagine e' l'unica cosa che si riconosce a colpo d'occhio. -->
+            <a class="orders__product" [routerLink]="['/orders', order.id]">
+              <img
+                *ngIf="photo(order) as src; else noPhoto"
+                class="orders__photo"
+                [src]="src"
+                alt=""
+                (error)="onImageError(order)"
+              />
+              <ng-template #noPhoto>
+                <span class="orders__thumb" [style.background]="thumbnail(order)" aria-hidden="true">
+                  {{ firstItem(order)?.productName?.charAt(0) }}
+                </span>
+              </ng-template>
+
+              <span>
+                {{ firstItem(order)?.productName }}
+                <span class="orders__more" *ngIf="order.items.length > 1">
+                  e altri {{ order.items.length - 1 }}
+                </span>
+              </span>
+            </a>
+          </td>
+
+          <td class="orders__numeric">{{ itemCount(order) }}</td>
+          <td class="orders__numeric">{{ order.totalAmount | currency: 'EUR' }}</td>
+
           <td>
             <span class="orders__status" [ngClass]="'orders__status--' + order.status.toLowerCase()">
               {{ statusLabel(order.status) }}
             </span>
+          </td>
+
+          <td class="orders__actions">
+            <a
+              class="orders__action"
+              [routerLink]="['/orders', order.id]"
+              [attr.title]="'Dettaglio ordine #' + order.id"
+              [attr.aria-label]="'Dettaglio ordine #' + order.id"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M6 2h12v20l-3-2-3 2-3-2-3 2z" />
+                <path d="M9.5 7.5h5M9.5 11.5h5M9.5 15.5h3" />
+              </svg>
+            </a>
+
+            <button
+              type="button"
+              class="orders__action orders__action--reorder"
+              (click)="reorder(order)"
+              [disabled]="reordering === order.id"
+              [attr.title]="'Riordina gli articoli dell\'ordine #' + order.id"
+              [attr.aria-label]="'Riordina gli articoli dell\'ordine #' + order.id"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 12a9 9 0 0 1 15.5-6.2M21 12a9 9 0 0 1-15.5 6.2" />
+                <path d="M18 3v3.5h-3.5M6 21v-3.5h3.5" />
+              </svg>
+            </button>
           </td>
         </tr>
       </tbody>

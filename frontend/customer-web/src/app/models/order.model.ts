@@ -3,6 +3,13 @@ export interface OrderItemInput {
   productName: string;
   quantity: number;
   unitPrice: number;
+  /**
+   * L'immagine viene conservata nell'ordine come il nome e il prezzo: un
+   * ordine e' una ricevuta e deve restare leggibile anche se il prodotto
+   * viene tolto dal catalogo. Facoltativa: non tutti i prodotti ne hanno
+   * una, e gli ordini fatti prima non ce l'hanno.
+   */
+  imageUrl?: string | null;
 }
 
 /** L'intestatario non si dichiara piu': lo ricava il backend dal token. */

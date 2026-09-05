@@ -7,7 +7,9 @@
   justify-content: space-between;
   gap: 1rem;
   padding: 1rem 2rem;
-  border-bottom: 1px solid #eee;
+  /* Opaca: senza, la trama del fondo trasparirebbe dietro il titolo. */
+  background: #fff;
+  border-bottom: 1px solid #e6e8ee;
 }
 
 .app-header__brand {
@@ -26,9 +28,16 @@
 }
 
 .app-main {
-  padding: 1.5rem 2rem;
+  padding: 1.5rem 1.75rem;
   max-width: 900px;
-  margin: 0 auto;
+  margin: 1.75rem auto;
+
+  /* Il foglio su cui poggia il contenuto. Serve alla leggibilita' prima
+     che all'estetica: sopra la trama, una tabella si leggerebbe peggio. */
+  background: #fff;
+  border: 1px solid #e6e8ee;
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
 }
 
 .toolbar {
@@ -288,4 +297,45 @@ td .status,
   margin-top: 1.25rem;
   font-size: 0.9rem;
   color: #666;
+}
+
+.notice {
+  padding: 0.7rem 0.9rem;
+  border-radius: 6px;
+  background: #e8f0fe;
+  color: #1a4f8a;
+}
+
+/* Comando testuale per azioni secondarie dentro una cella. */
+.link-button {
+  border: 0;
+  background: none;
+  padding: 0 0 0 0.4rem;
+  color: #4f46e5;
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.restock {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: 0.4rem;
+}
+
+.restock input {
+  width: 72px;
+  margin: 0;
+  padding: 0.2rem 0.4rem;
+}
+
+.restock .icon-button {
+  width: 28px;
+  height: 28px;
+}
+
+.restock .icon-button svg {
+  width: 15px;
+  height: 15px;
 }

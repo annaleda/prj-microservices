@@ -1355,6 +1355,97 @@ esclusi, storico vuoto se ci sono solo quelli, e ordini ancora in
 lavorazione che devono restare visibili) piu' quello sul nome
 accessibile del cestino.
 
+### 27. Ordini: riordino, dettaglio, console admin operativa
+
+Seconda tornata di richieste dell'utente, piu' sostanziosa della
+precedente: non solo aspetto ma funzioni che mancavano.
+
+**"I miei ordini" rifatta.** Colonna quantita' separata dagli articoli,
+foto piccola del primo articolo accanto al nome (in un elenco di numeri
+e date l'immagine e' l'unica cosa che si riconosce a colpo d'occhio), e
+due comandi per riga: **dettaglio ordine** e **riordino**.
+
+**Nuova pagina di dettaglio ordine** (`/orders/:id`): tutti gli
+articoli, non solo il primo, con quantita' e prezzi **dell'ordine** e
+non quelli attuali — e' una ricevuta, deve dire quanto e' stato pagato.
+
+**Riordino** (`ReorderService`): rimette nel carrello gli articoli di un
+ordine passato usando pero' i **dati di oggi** del catalogo. Un ordine
+conserva il prezzo del giorno in cui e' stato fatto, e rimetterlo nel
+carrello a quel prezzo farebbe comprare a una cifra che non e' piu'
+quella di vendita; un prodotto tolto dal catalogo non si puo'
+riordinare, e chi riordina deve saperlo invece di scoprirlo alla cassa.
+Cinque test lo inchiodano, incluso il caso del catalogo irraggiungibile
+(il carrello non deve restare a meta').
+
+**L'immagine ora fa parte dell'ordine.** L'utente ha segnalato che nei
+suoi ordini il "Mouse wireless" non aveva la foto. Non era loremflickr:
+quell'ordine (#15) puntava al `productId` 1, cioe' il doppione del
+laptop eliminato nella sezione 22. La pagina cercava l'immagine nel
+catalogo *attuale*, e quel prodotto non c'era piu'.
+
+Il punto vero e' che **l'immagine era l'unico dato della riga d'ordine a
+non essere conservato**: nome e prezzo lo erano gia'. Aggiunta la
+colonna `order_items.image_url`, valorizzata alla creazione: un ordine
+resta leggibile anche se il prodotto sparisce dal catalogo o gli si
+cambia la foto. La lettura dal catalogo resta come ripiego per gli
+ordini fatti prima, poi la banda colorata.
+
+**Console admin operativa.** Nuova pagina Ordini (`/orders` in Admin
+Web) — l'unico posto dove si vedono gli ordini **non riusciti**, che dal
+cliente sono nascosti dalla sezione 26 — con cliente, articoli, stato e
+motivo, e un filtro "solo non riusciti". Da li' l'admin puo':
+
+- **eliminare** un ordine annullato. Solo annullati: uno confermato e'
+  la traccia di una vendita avvenuta, con un pagamento e delle scorte
+  dietro, e cancellarlo perderebbe quella storia — il servizio risponde
+  409. La regola sta nel backend e non nell'interfaccia, perche' e' una
+  regola sui dati;
+- **rifornire** un prodotto direttamente dalla riga dell'ordine perso
+  per scorte esaurite, con il campo precompilato alla quantita' che era
+  stata ordinata: e' il minimo che servirebbe perche' quello stesso
+  ordine non fallisca di nuovo.
+
+**Bug reale trovato dalla pagina nuova**: compariva "Richiesta fallita
+(401)" pur avendo caricato i dati. In React **gli effect dei figli
+girano prima di quelli del genitore**: `App` passava il token al client
+HTTP dentro un `useEffect`, quindi la prima richiesta di una pagina
+appena montata partiva senza token; il secondo tentativo riusciva ma
+l'errore restava a schermo. Il token ora si scrive **durante il
+render** — non e' un aggiornamento di stato, e' la sincronizzazione di
+un valore esterno, sempre lo stesso a parita' di sessione.
+
+**Altre correzioni su indicazione dell'utente**: spazio fra il riquadro
+cliccabile del prodotto e i comandi di quantita' nel checkout; nel
+dettaglio prodotto due pulsanti (un "+" pieno per aggiungere e un
+carrello vuoto per andarci); zoom dell'immagine — prima provato al
+passaggio del mouse, scartato dall'utente, sostituito da un **popup a
+tutto schermo** con dentro un ulteriore ingrandimento al clic, che segue
+il puntatore; texture a puntini sullo sfondo (rifatta piu' marcata: la
+prima versione era cosi' discreta che l'utente non la vedeva), messa poi
+anche su Admin Web.
+
+La texture su Admin Web ha richiesto un passaggio in piu': li' il
+contenuto poggiava direttamente sul fondo, senza alcuna superficie, e
+tabelle e moduli sarebbero finiti sopra la trama. `.app-main` e' quindi
+diventato un foglio bianco con bordo e ombra leggera, come le schede di
+Customer Web — serve alla leggibilita' prima che all'estetica.
+
+**Verifiche**: Order Service 20/20 (nuovi: immagine conservata, articolo
+senza immagine accettato, eliminazione di un annullato, rifiuto su un
+confermato, cliente che non puo' eliminare), frontend 20/20 (riordino e
+storico). Le regole di eliminazione provate anche dal vivo con token
+veri: 204 sull'annullato, 409 sul confermato, 403 da cliente.
+
+*Nota di metodo*: gli screenshot di verifica ormai passano da uno script
+CDP che fa il **login vero** su Keycloak. Due inciampi che valgono la
+prossima volta: la sessione SSO resta nel profilo di Chrome, quindi per
+fotografare un altro utente serve un profilo nuovo (altrimenti si
+riapre come il precedente — cosa che ha pero' confermato che il blocco
+per ruolo funziona); e per controllare cio' che e' difficile da
+fotografare (un filtro applicato) conviene interrogare il DOM e
+stamparne il conteggio, che e' piu' solido di un'immagine.
+
 ### In sospeso: Admin Web
 
 Annotazione dell'utente (5 settembre 2026): **la parte admin e' messa

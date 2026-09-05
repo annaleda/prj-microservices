@@ -19,3 +19,19 @@ export async function getOrders(): Promise<Order[]> {
   }
   return (await response.json()) as Order[];
 }
+
+/**
+ * Elimina un ordine annullato.
+ *
+ * Il servizio accetta solo ordini in stato CANCELLED: uno confermato e' la
+ * traccia di una vendita avvenuta e risponde 409. La regola sta li' e non
+ * qui, perche' e' una regola sui dati e non un accorgimento
+ * dell'interfaccia.
+ */
+export async function deleteOrder(id: number): Promise<void> {
+  const response = await fetch(`${BASE_URL}/${id}`, { method: 'DELETE', headers: authHeaders() });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Richiesta fallita (${response.status}): ${body || response.statusText}`);
+  }
+}

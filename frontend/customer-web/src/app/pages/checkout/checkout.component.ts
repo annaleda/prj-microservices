@@ -70,14 +70,19 @@ export class CheckoutComponent {
     this.error = null;
     this.submitting = true;
 
-    // L'immagine serve solo a disegnare il carrello: all'Order Service si
-    // manda cio' che l'ordine deve contenere, non lo stato del frontend.
-    const items = this.cartService.snapshot.map(({ productId, productName, quantity, unitPrice }) => ({
-      productId,
-      productName,
-      quantity,
-      unitPrice,
-    }));
+    // Si manda esattamente cio' che l'ordine deve contenere, immagine
+    // compresa: viene conservata nella riga d'ordine come il nome e il
+    // prezzo, cosi' l'ordine resta leggibile anche se il prodotto sparisce
+    // dal catalogo.
+    const items = this.cartService.snapshot.map(
+      ({ productId, productName, quantity, unitPrice, imageUrl }) => ({
+        productId,
+        productName,
+        quantity,
+        unitPrice,
+        imageUrl,
+      })
+    );
 
     this.orderService
       .createOrder({ items })

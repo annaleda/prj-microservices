@@ -42,4 +42,19 @@ public class OrderItem {
 
     @Column(name = "unit_price", nullable = false)
     private BigDecimal unitPrice;
+
+    /**
+     * Immagine del prodotto al momento dell'acquisto.
+     *
+     * Conservata qui come gia' il nome e il prezzo: un ordine e' una
+     * ricevuta, e deve restare leggibile anche se il prodotto viene tolto
+     * dal catalogo o gli viene cambiata la foto. Cercarla nel catalogo al
+     * momento di mostrarla e' cio' che faceva sparire l'immagine dagli
+     * ordini vecchi appena il prodotto spariva.
+     *
+     * Nulla sugli ordini creati prima che questa colonna esistesse, e sui
+     * prodotti che non hanno un'immagine.
+     */
+    @Column(name = "image_url")
+    private String imageUrl;
 }

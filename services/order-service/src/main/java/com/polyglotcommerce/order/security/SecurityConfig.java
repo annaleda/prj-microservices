@@ -33,6 +33,7 @@ public class SecurityConfig {
                         .antMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .antMatchers(HttpMethod.POST, "/api/orders").hasRole("CUSTOMER")
                         .antMatchers(HttpMethod.PATCH, "/api/orders/*/status").hasRole("ADMIN")
+                        .antMatchers(HttpMethod.DELETE, "/api/orders/*").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt()
                         .jwtAuthenticationConverter(jwtAuthenticationConverter()));

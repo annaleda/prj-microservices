@@ -87,6 +87,7 @@ public class OrderService {
                     .productName(itemRequest.getProductName())
                     .quantity(itemRequest.getQuantity())
                     .unitPrice(itemRequest.getUnitPrice())
+                    .imageUrl(itemRequest.getImageUrl())
                     .build();
             order.getItems().add(item);
         }
@@ -156,6 +157,32 @@ public class OrderService {
             order.setCancellationReason(reasonCode);
         }
         orderRepository.save(order);
+    }
+
+    /**
+     * Elimina un ordine annullato.
+     *
+     * Solo annullati: un ordine confermato e' la traccia di una vendita
+     * avvenuta, con un pagamento e delle scorte impegnate dietro, e
+     * cancellarlo significherebbe perdere quella storia. Un ordine
+     * annullato non ha lasciato nulla — le scorte sono state rilasciate e
+     * il pagamento non e' stato addebitato — quindi togliere di mezzo il
+     * residuo e' legittimo.
+     *
+     * Nessun evento: la saga di quell'ordine si e' gia' conclusa, non c'e'
+     * nessuno da avvisare.
+     */
+    @Transactional
+    public void deleteCancelled(Long id) {
+        Order order = getOrderOrThrow(id);
+
+        if (order.getStatus() != OrderStatus.CANCELLED) {
+            throw new InvalidOrderStatusTransitionException(
+                    "Order " + id + " is " + order.getStatus() + ": only cancelled orders can be deleted");
+        }
+
+        orderRepository.delete(order);
+        log.info("Cancelled order {} deleted", id);
     }
 
     private void publishOrderCreated(Order order) {

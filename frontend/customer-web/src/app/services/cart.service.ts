@@ -41,6 +41,31 @@ export class CartService {
     this.update(items);
   }
 
+  /**
+   * Aggiunge un prodotto in una quantita' data, sommandosi a quella gia'
+   * nel carrello. Serve al riordino, che rimette dentro tutti gli articoli
+   * di un ordine passato in un colpo solo.
+   */
+  addQuantity(product: Product, quantity: number): void {
+    if (quantity <= 0) {
+      return;
+    }
+    const items = this.itemsSubject.value.map((item) => ({ ...item }));
+    const existing = items.find((item) => item.productId === product.id);
+    if (existing) {
+      existing.quantity += quantity;
+    } else {
+      items.push({
+        productId: product.id,
+        productName: product.name,
+        quantity,
+        unitPrice: product.price,
+        imageUrl: product.imageUrl,
+      });
+    }
+    this.update(items);
+  }
+
   remove(productId: number): void {
     this.update(this.itemsSubject.value.filter((item) => item.productId !== productId));
   }

@@ -49,9 +49,23 @@ body {
 body {
   font-family: var(--font);
   color: var(--ink);
-  background: var(--surface-sunken);
   -webkit-font-smoothing: antialiased;
   line-height: 1.5;
+
+  // Texture di sfondo: una griglia di puntini su una tinta leggermente
+  // sfumata. E' un SVG scritto qui dentro e non un'immagine da scaricare —
+  // pesa poche decine di byte, non aggiunge una richiesta di rete e resta
+  // nitido a qualunque densita' di schermo.
+  //
+  // Due livelli: sopra i puntini, sotto la sfumatura. In CSS il primo
+  // valore di `background-image` e' quello piu' in alto.
+  background-color: var(--surface-sunken);
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18'%3E%3Ccircle cx='2' cy='2' r='1.35' fill='%23475467' fill-opacity='0.16'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, #eef1f7 0%, #f6f7fb 60%);
+  // Fissa: scorrendo la pagina la trama resta ferma e le schede scorrono
+  // sopra, invece di trascinarsi dietro il disegno.
+  background-attachment: fixed;
 }
 
 h1 {

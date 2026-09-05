@@ -64,7 +64,8 @@ class OrderApiIntegrationTest {
     private TestRestTemplate restTemplate;
 
     private OrderRequest sampleOrderRequest() {
-        OrderItemRequest item = new OrderItemRequest(1L, "Wireless Mouse", 2, new BigDecimal("29.90"));
+        OrderItemRequest item = new OrderItemRequest(
+                1L, "Wireless Mouse", 2, new BigDecimal("29.90"), "https://example.com/mouse.jpg");
         return new OrderRequest(List.of(item));
     }
 
@@ -187,6 +188,72 @@ class OrderApiIntegrationTest {
 
         assertThat(readOrder(created.getId()).getStatus())
                 .isEqualTo(OrderStatus.CANCELLED);
+    }
+
+    @Test
+    void anAdminCanDeleteACancelledOrder() {
+        OrderResponse created = createOrderAs(CUSTOMER);
+        KafkaTestSupport.send(kafka.getBootstrapServers(), "order.cancelled", String.valueOf(created.getId()),
+                KafkaTestSupport.envelope("ORDER_CANCELLED", "test-correlation",
+                        "{\"orderId\":" + created.getId() + ",\"reasonCode\":\"INVENTORY_REJECTED\"}"));
+        await(() -> readOrder(created.getId()).getStatus() == OrderStatus.CANCELLED);
+
+        assertThat(restTemplate.exchange("/api/orders/" + created.getId(), HttpMethod.DELETE,
+                as(ADMIN), Void.class).getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+
+        assertThat(restTemplate.exchange("/api/orders/" + created.getId(), HttpMethod.GET,
+                as(ADMIN), String.class).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void aConfirmedOrderCannotBeDeleted() {
+        // Un ordine confermato e' la traccia di una vendita avvenuta:
+        // cancellarlo perderebbe quella storia.
+        OrderResponse created = createOrderAs(CUSTOMER);
+        restTemplate.exchange("/api/orders/" + created.getId() + "/status", HttpMethod.PATCH,
+                as(ADMIN, new OrderStatusUpdateRequest(OrderStatus.CONFIRMED)), OrderResponse.class);
+
+        assertThat(restTemplate.exchange("/api/orders/" + created.getId(), HttpMethod.DELETE,
+                as(ADMIN), String.class).getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+
+        assertThat(readOrder(created.getId()).getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+    }
+
+    @Test
+    void aCustomerCannotDeleteOrders() {
+        OrderResponse created = createOrderAs(CUSTOMER);
+
+        assertThat(restTemplate.exchange("/api/orders/" + created.getId(), HttpMethod.DELETE,
+                as(CUSTOMER), String.class).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(restTemplate.exchange("/api/orders/" + created.getId(), HttpMethod.DELETE,
+                as(ANONYMOUS), String.class).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void theProductImageIsKeptWithTheOrder() {
+        // L'immagine si conserva nella riga d'ordine come il nome e il
+        // prezzo: un ordine e' una ricevuta, e deve restare leggibile anche
+        // quando il prodotto viene tolto dal catalogo. Cercarla nel
+        // catalogo al momento di mostrarla la faceva sparire.
+        OrderResponse created = createOrderAs(CUSTOMER);
+
+        assertThat(created.getItems().get(0).getImageUrl()).isEqualTo("https://example.com/mouse.jpg");
+        assertThat(readOrder(created.getId()).getItems().get(0).getImageUrl())
+                .isEqualTo("https://example.com/mouse.jpg");
+    }
+
+    @Test
+    void anItemWithoutAnImageIsAccepted() {
+        // Non tutti i prodotti hanno una foto: l'assenza non deve far
+        // fallire la creazione dell'ordine.
+        OrderRequest request = new OrderRequest(List.of(
+                new OrderItemRequest(2L, "Prodotto senza foto", 1, new BigDecimal("5.00"), null)));
+
+        ResponseEntity<OrderResponse> response = restTemplate.exchange(
+                "/api/orders", HttpMethod.POST, as(CUSTOMER, request), OrderResponse.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(response.getBody().getItems().get(0).getImageUrl()).isNull();
     }
 
     @Test

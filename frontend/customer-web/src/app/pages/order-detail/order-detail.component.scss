@@ -1,0 +1,178 @@
+.order-detail {
+  max-width: 720px;
+
+  &__back {
+    display: inline-block;
+    margin-bottom: 1.25rem;
+    color: var(--ink-muted);
+    text-decoration: none;
+    font-size: 0.9rem;
+
+    &:hover {
+      color: var(--brand);
+    }
+  }
+
+  &__panel {
+    padding: 1.5rem 1.75rem;
+  }
+
+  &__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+
+    h1 {
+      margin: 0;
+    }
+  }
+
+  &__date {
+    margin: 0.25rem 0 0;
+    color: var(--ink-muted);
+    font-size: 0.9rem;
+  }
+
+  &__status {
+    flex: none;
+    padding: 0.2rem 0.7rem;
+    border-radius: var(--radius-pill);
+    font-size: 0.8rem;
+    font-weight: 600;
+
+    &--created {
+      background: var(--warning-soft);
+      color: var(--warning);
+    }
+
+    &--confirmed {
+      background: var(--success-soft);
+      color: var(--success);
+    }
+
+    &--cancelled {
+      background: var(--danger-soft);
+      color: var(--danger);
+    }
+  }
+
+  &__cancelled {
+    padding: 0.85rem 1rem;
+    margin: 0 0 1.25rem;
+    border-radius: var(--radius-sm);
+    background: var(--danger-soft);
+    color: var(--danger);
+    font-size: 0.95rem;
+  }
+
+  &__items {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  &__item {
+    display: grid;
+    // Nome che si allarga, quantita' e totale riga a larghezza propria.
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  &__product {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    text-decoration: none;
+    color: inherit;
+    min-width: 0;
+
+    &:hover .order-detail__name {
+      text-decoration: underline;
+    }
+  }
+
+  &__photo,
+  &__thumb {
+    flex: none;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-sm);
+  }
+
+  &__photo {
+    object-fit: cover;
+    background: var(--surface-sunken);
+  }
+
+  &__thumb {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.92);
+  }
+
+  &__name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__qty,
+  &__line {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  &__qty {
+    color: var(--ink-muted);
+    font-size: 0.9rem;
+  }
+
+  &__line {
+    font-weight: 600;
+  }
+
+  &__total {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 1rem 0 0;
+    color: var(--ink-muted);
+
+    strong {
+      font-size: 1.3rem;
+      color: var(--ink);
+    }
+  }
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1.25rem;
+  }
+
+  &__notice {
+    padding: 0.85rem 1rem;
+    border-radius: var(--radius-sm);
+    background: var(--warning-soft);
+    color: var(--warning);
+  }
+
+  &__error {
+    padding: 0.85rem 1rem;
+    border-radius: var(--radius-sm);
+    background: var(--danger-soft);
+    color: var(--danger);
+  }
+
+  &__empty {
+    color: var(--ink-muted);
+  }
+}

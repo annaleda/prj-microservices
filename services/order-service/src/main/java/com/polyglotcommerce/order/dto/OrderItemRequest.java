@@ -27,4 +27,7 @@ public class OrderItemRequest {
     @NotNull
     @Positive
     private BigDecimal unitPrice;
+
+    /** Facoltativa: non tutti i prodotti hanno un'immagine. */
+    private String imageUrl;
 }

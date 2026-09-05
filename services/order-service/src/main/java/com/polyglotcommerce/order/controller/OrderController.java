@@ -8,6 +8,7 @@ import com.polyglotcommerce.order.service.OrderService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -49,6 +50,17 @@ public class OrderController {
         OrderResponse created = orderService.create(request, Caller.from(jwt));
         URI location = uriBuilder.path("/api/orders/{id}").buildAndExpand(created.getId()).toUri();
         return ResponseEntity.created(location).body(created);
+    }
+
+    /**
+     * Elimina un ordine annullato (solo ADMIN, vedi SecurityConfig).
+     * Gli ordini confermati non si eliminano: sono la traccia di una
+     * vendita avvenuta.
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
+        orderService.deleteCancelled(id);
+        return ResponseEntity.noContent().build();
     }
 
     @PatchMapping("/{id}/status")

@@ -5,7 +5,9 @@ import { of } from 'rxjs';
 import { OrdersComponent } from './orders.component';
 import { OrderResponse, OrderStatus } from '../../models/order.model';
 import { AuthService } from '../../services/auth.service';
+import { CatalogService } from '../../services/catalog.service';
 import { OrderService } from '../../services/order.service';
+import { ReorderService } from '../../services/reorder.service';
 
 /**
  * Lo storico non mostra gli ordini annullati: un acquisto non andato a
@@ -37,6 +39,12 @@ describe('OrdersComponent', () => {
       providers: [
         { provide: AuthService, useValue: authStub },
         { provide: OrderService, useValue: { getOrders: () => of(orders) } },
+        // La pagina chiede al catalogo le immagini dei prodotti (ripiego
+        // per gli ordini vecchi, che non se le portano dietro): qui non
+        // servono, ma il componente non deve dipendere da HttpClient nei
+        // test per una cosa accessoria.
+        { provide: CatalogService, useValue: { getProducts: () => of([]) } },
+        { provide: ReorderService, useValue: { reorder: () => of({ added: 0, unavailable: [] }) } },
       ],
     });
     const fixture = TestBed.createComponent(OrdersComponent);

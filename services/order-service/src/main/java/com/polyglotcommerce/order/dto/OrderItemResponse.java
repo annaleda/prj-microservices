@@ -19,6 +19,7 @@ public class OrderItemResponse {
     private Integer quantity;
     private BigDecimal unitPrice;
     private BigDecimal lineTotal;
+    private String imageUrl;
 
     public static OrderItemResponse fromEntity(OrderItem item) {
         return OrderItemResponse.builder()
@@ -27,6 +28,7 @@ public class OrderItemResponse {
                 .quantity(item.getQuantity())
                 .unitPrice(item.getUnitPrice())
                 .lineTotal(item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
+                .imageUrl(item.getImageUrl())
                 .build();
     }
 }

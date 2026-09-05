@@ -1,0 +1,65 @@
+<section class="order-detail">
+  <a routerLink="/orders" class="order-detail__back">&larr; I miei ordini</a>
+
+  <p *ngIf="loading">Caricamento…</p>
+
+  <p *ngIf="!loading && !auth.isLoggedIn" class="order-detail__empty">
+    Per vedere questo ordine devi
+    <a href="javascript:void(0)" (click)="auth.login()">accedere</a>.
+  </p>
+
+  <p *ngIf="error" class="order-detail__error">{{ error }}</p>
+  <p *ngIf="notice" class="order-detail__notice">{{ notice }}</p>
+
+  <div class="card order-detail__panel" *ngIf="order as order">
+    <header class="order-detail__header">
+      <div>
+        <h1>Ordine #{{ order.id }}</h1>
+        <p class="order-detail__date">{{ order.createdAt | date: 'dd/MM/yyyy HH:mm' }}</p>
+      </div>
+      <span class="order-detail__status" [ngClass]="'order-detail__status--' + order.status.toLowerCase()">
+        {{ statusLabel(order.status) }}
+      </span>
+    </header>
+
+    <p *ngIf="order.status === 'CANCELLED'" class="order-detail__cancelled">
+      {{ cancellationMessage }}
+    </p>
+
+    <ul class="order-detail__items">
+      <li *ngFor="let item of order.items" class="order-detail__item">
+        <a class="order-detail__product" [routerLink]="['/products', item.productId]">
+          <img
+            *ngIf="photo(item) as src; else noPhoto"
+            class="order-detail__photo"
+            [src]="src"
+            alt=""
+            (error)="onImageError(item)"
+          />
+          <ng-template #noPhoto>
+            <span class="order-detail__thumb" [style.background]="thumbnail(item)" aria-hidden="true">
+              {{ item.productName.charAt(0) }}
+            </span>
+          </ng-template>
+
+          <span class="order-detail__name">{{ item.productName }}</span>
+        </a>
+
+        <span class="order-detail__qty">{{ item.quantity }} &times; {{ item.unitPrice | currency: 'EUR' }}</span>
+        <span class="order-detail__line">{{ item.lineTotal | currency: 'EUR' }}</span>
+      </li>
+    </ul>
+
+    <div class="order-detail__total">
+      <span>{{ itemCount() }} articoli</span>
+      <strong>{{ order.totalAmount | currency: 'EUR' }}</strong>
+    </div>
+
+    <div class="order-detail__actions">
+      <button type="button" (click)="reorder()" [disabled]="reordering">
+        {{ reordering ? 'Aggiungo al carrello…' : 'Riordina' }}
+      </button>
+      <a routerLink="/">Torna al catalogo</a>
+    </div>
+  </div>
+</section>
