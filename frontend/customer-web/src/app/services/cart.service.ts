@@ -3,9 +3,21 @@ import { BehaviorSubject } from 'rxjs';
 import { CartItem } from '../models/cart-item.model';
 import { Product } from '../models/product.model';
 
+const STORAGE_KEY = 'polyglot-commerce.cart';
+
+/**
+ * Carrello del cliente.
+ *
+ * E' persistito in localStorage e non solo in memoria per una ragione
+ * precisa: il login con Keycloak e' un redirect vero e proprio, la
+ * pagina lascia l'applicazione e torna ricaricata. Con il carrello in
+ * sola memoria, chi arriva alla cassa da disconnesso e accede si
+ * ritroverebbe il carrello vuoto — cioe' perderebbe proprio quello che
+ * stava cercando di comprare.
+ */
 @Injectable({ providedIn: 'root' })
 export class CartService {
-  private readonly itemsSubject = new BehaviorSubject<CartItem[]>([]);
+  private readonly itemsSubject = new BehaviorSubject<CartItem[]>(CartService.read());
   readonly items$ = this.itemsSubject.asObservable();
 
   get snapshot(): CartItem[] {
@@ -25,14 +37,35 @@ export class CartService {
         unitPrice: product.price,
       });
     }
-    this.itemsSubject.next(items);
+    this.update(items);
   }
 
   remove(productId: number): void {
-    this.itemsSubject.next(this.itemsSubject.value.filter((item) => item.productId !== productId));
+    this.update(this.itemsSubject.value.filter((item) => item.productId !== productId));
   }
 
   clear(): void {
-    this.itemsSubject.next([]);
+    this.update([]);
+  }
+
+  private update(items: CartItem[]): void {
+    this.itemsSubject.next(items);
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    } catch {
+      // Spazio esaurito o storage negato (finestra anonima, impostazioni
+      // del browser): il carrello continua a funzionare in memoria, non
+      // sopravvivera' al login. Meglio che rompere l'applicazione.
+    }
+  }
+
+  private static read(): CartItem[] {
+    try {
+      const stored = window.localStorage.getItem(STORAGE_KEY);
+      const parsed = stored ? JSON.parse(stored) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
   }
 }

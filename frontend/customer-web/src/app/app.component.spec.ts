@@ -1,11 +1,22 @@
 import { TestBed } from '@angular/core/testing';
 import { RouterTestingModule } from '@angular/router/testing';
 import { AppComponent } from './app.component';
+import { AuthService } from './services/auth.service';
 
 describe('AppComponent', () => {
+  // AppComponent mostra il nome dell'utente e i comandi di accesso:
+  // qui basta un AuthService finto, il login vero non c'entra.
+  const authStub = {
+    isLoggedIn: false,
+    username: null,
+    login: () => undefined,
+    logout: () => undefined,
+  };
+
   beforeEach(() => TestBed.configureTestingModule({
     imports: [RouterTestingModule],
-    declarations: [AppComponent]
+    declarations: [AppComponent],
+    providers: [{ provide: AuthService, useValue: authStub }]
   }));
 
   it('should create the app', () => {

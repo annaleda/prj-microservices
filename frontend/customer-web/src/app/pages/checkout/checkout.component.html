@@ -2,50 +2,63 @@
   <h1>Checkout</h1>
 
   <ng-container *ngIf="!order">
-    <table *ngIf="(items$ | async)?.length; else emptyCart">
-      <thead>
-        <tr>
-          <th>Prodotto</th>
-          <th>Qta</th>
-          <th>Prezzo</th>
-          <th>Totale</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr *ngFor="let item of items$ | async">
-          <td>{{ item.productName }}</td>
-          <td>{{ item.quantity }}</td>
-          <td>{{ item.unitPrice | currency: 'EUR' }}</td>
-          <td>{{ item.quantity * item.unitPrice | currency: 'EUR' }}</td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="card checkout__panel" *ngIf="(items$ | async)?.length; else emptyCart">
+      <table>
+        <thead>
+          <tr>
+            <th>Prodotto</th>
+            <th>Qta</th>
+            <th>Prezzo</th>
+            <th>Totale</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let item of items$ | async">
+            <td>{{ item.productName }}</td>
+            <td>{{ item.quantity }}</td>
+            <td>{{ item.unitPrice | currency: 'EUR' }}</td>
+            <td>{{ item.quantity * item.unitPrice | currency: 'EUR' }}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="checkout__total">
+        <span>Totale</span>
+        <strong>{{ total | currency: 'EUR' }}</strong>
+      </div>
+
+      <div class="checkout__actions">
+        <p *ngIf="auth.isLoggedIn; else loginToOrder" class="checkout__note">
+          Ordine intestato a <strong>{{ auth.username }}</strong>.
+        </p>
+        <ng-template #loginToOrder>
+          <p class="checkout__note">
+            Per completare l'ordine devi
+            <a href="javascript:void(0)" (click)="auth.login()">accedere</a>
+            o <a href="javascript:void(0)" (click)="auth.register()">registrarti</a>.
+          </p>
+        </ng-template>
+
+        <button (click)="placeOrder()" [disabled]="submitting || !auth.isLoggedIn || total === 0">
+          Effettua ordine
+        </button>
+      </div>
+    </div>
 
     <ng-template #emptyCart>
-      <p>Il carrello è vuoto. <a routerLink="/">Torna al catalogo</a>.</p>
+      <div class="card checkout__empty">
+        <p>Il carrello è vuoto.</p>
+        <a routerLink="/">Torna al catalogo</a>
+      </div>
     </ng-template>
-
-    <p class="checkout__total"><strong>Totale: {{ total | currency: 'EUR' }}</strong></p>
-
-    <p *ngIf="auth.isLoggedIn; else loginToOrder">
-      Ordine intestato a <strong>{{ auth.username }}</strong>.
-    </p>
-    <ng-template #loginToOrder>
-      <p>
-        Per completare l'ordine devi
-        <a href="javascript:void(0)" (click)="auth.login()">accedere</a>.
-      </p>
-    </ng-template>
-
-    <button (click)="placeOrder()" [disabled]="submitting || !auth.isLoggedIn || total === 0">
-      Effettua ordine
-    </button>
   </ng-container>
 
-  <ng-container *ngIf="order">
-    <p>Ordine #{{ order.id }} — totale {{ order.totalAmount | currency: 'EUR' }}.</p>
+  <div class="card checkout__panel" *ngIf="order">
+    <p class="checkout__order">
+      Ordine <strong>#{{ order.id }}</strong> — {{ order.totalAmount | currency: 'EUR' }}
+    </p>
 
-    <p *ngIf="awaitingOutcome">
+    <p *ngIf="awaitingOutcome" class="checkout__pending">
       Ordine ricevuto: verifica delle scorte e pagamento in corso…
     </p>
 
@@ -57,8 +70,11 @@
       Il carrello è rimasto invariato.
     </p>
 
-    <a *ngIf="!awaitingOutcome" routerLink="/">Torna al catalogo</a>
-  </ng-container>
+    <div class="checkout__actions" *ngIf="!awaitingOutcome">
+      <a routerLink="/orders">I miei ordini</a>
+      <a routerLink="/">Torna al catalogo</a>
+    </div>
+  </div>
 
   <p *ngIf="error" class="checkout__error">{{ error }}</p>
 </section>

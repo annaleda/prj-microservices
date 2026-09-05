@@ -135,6 +135,8 @@ services:
       # mano dalla console: la configurazione (ruoli, client, utenti demo)
       # sta nel repository ed e' ricreabile da zero.
       - ./infrastructure/keycloak/realm-polyglot-commerce.json:/opt/keycloak/data/import/realm.json:ro
+      # Tema di login/registrazione con la grafica dell'applicazione.
+      - ./infrastructure/keycloak/themes:/opt/keycloak/themes:ro
     networks:
       - commerce-network
     healthcheck:

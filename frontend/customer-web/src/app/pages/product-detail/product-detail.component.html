@@ -1,12 +1,20 @@
 <section class="detail" *ngIf="product$ | async as product; else errorOrLoading">
   <a routerLink="/" class="detail__back">&larr; Torna al catalogo</a>
 
-  <h1>{{ product.name }}</h1>
-  <p class="detail__category">{{ product.categoryName }}</p>
-  <p class="detail__price">{{ product.price | currency: 'EUR' }}</p>
-  <p class="detail__sku">SKU: {{ product.sku }}</p>
-  <p class="detail__description">{{ product.description }}</p>
-  <button (click)="addToCart(product)">Aggiungi al carrello</button>
+  <div class="detail__panel card">
+    <span class="detail__thumb" [style.background]="thumbnail(product)" aria-hidden="true">
+      {{ product.name.charAt(0) }}
+    </span>
+
+    <div class="detail__info">
+      <span class="detail__category">{{ product.categoryName }}</span>
+      <h1>{{ product.name }}</h1>
+      <p class="detail__price">{{ product.price | currency: 'EUR' }}</p>
+      <p class="detail__description">{{ product.description }}</p>
+      <p class="detail__sku">SKU {{ product.sku }}</p>
+      <button (click)="addToCart(product)">Aggiungi al carrello</button>
+    </div>
+  </div>
 </section>
 
 <ng-template #errorOrLoading>
@@ -14,6 +22,6 @@
     Prodotto non trovato o catalog-service non raggiungibile.
   </p>
   <ng-template #loading>
-    <p>Caricamento...</p>
+    <p>Caricamento…</p>
   </ng-template>
 </ng-template>

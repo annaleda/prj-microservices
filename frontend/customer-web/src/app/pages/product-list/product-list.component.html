@@ -1,9 +1,12 @@
 <section class="catalog">
   <div class="catalog__toolbar">
-    <h1>Catalogo</h1>
+    <div>
+      <h1>Catalogo</h1>
+      <p class="catalog__subtitle">Scegli un prodotto e aggiungilo al carrello.</p>
+    </div>
 
     <label class="catalog__filter">
-      Categoria:
+      <span>Categoria</span>
       <select (change)="onCategoryChange($any($event.target).value)">
         <option value="">Tutte</option>
         <option *ngFor="let category of categories$ | async" [value]="category.id">
@@ -18,13 +21,23 @@
   </p>
 
   <div class="catalog__grid">
-    <div *ngFor="let product of filteredProducts$ | async" class="product-card">
-      <a [routerLink]="['/products', product.id]">
-        <h2>{{ product.name }}</h2>
-        <p class="product-card__category">{{ product.categoryName }}</p>
-        <p class="product-card__price">{{ product.price | currency: 'EUR' }}</p>
+    <article *ngFor="let product of filteredProducts$ | async" class="product-card card">
+      <a [routerLink]="['/products', product.id]" class="product-card__link">
+        <!-- Il catalogo non ha immagini: al loro posto una banda colorata
+             derivata dal nome, cosi' ogni prodotto resta riconoscibile a
+             colpo d'occhio senza inventare foto che non esistono. -->
+        <span class="product-card__thumb" [style.background]="thumbnail(product)" aria-hidden="true">
+          {{ product.name.charAt(0) }}
+        </span>
+
+        <span class="product-card__body">
+          <span class="product-card__category">{{ product.categoryName }}</span>
+          <h2>{{ product.name }}</h2>
+          <span class="product-card__price">{{ product.price | currency: 'EUR' }}</span>
+        </span>
       </a>
-      <button (click)="addToCart(product, $event)">+ Carrello</button>
-    </div>
+
+      <button (click)="addToCart(product, $event)">Aggiungi al carrello</button>
+    </article>
   </div>
 </section>

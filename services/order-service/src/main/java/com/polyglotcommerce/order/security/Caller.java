@@ -12,17 +12,20 @@ import java.util.Map;
  *
  * L'email non arriva piu' dal corpo della richiesta ma dal token: prima
  * chiunque poteva creare un ordine intestandolo a un indirizzo qualsiasi.
+ * L'identita' vera e propria e' pero' il "subject", non l'email.
  */
 public class Caller {
 
     private static final String ADMIN = "ADMIN";
     private static final String SUPPORT = "SUPPORT";
 
+    private final String subject;
     private final String email;
     private final String username;
     private final boolean staff;
 
-    private Caller(String email, String username, boolean staff) {
+    private Caller(String subject, String email, String username, boolean staff) {
+        this.subject = subject;
         this.email = email;
         this.username = username;
         this.staff = staff;
@@ -39,12 +42,19 @@ public class Caller {
         String email = jwt.getClaimAsString("email");
 
         return new Caller(
+                // Identificativo stabile dell'utente: e' con questo che si
+                // decide di chi e' un ordine.
+                jwt.getSubject(),
                 // Un utente Keycloak potrebbe non avere l'email valorizzata:
                 // in quel caso l'ordine resta comunque riconducibile a chi lo
                 // ha creato tramite lo username.
                 email != null && !email.isEmpty() ? email : username,
                 username,
                 roles.contains(ADMIN) || roles.contains(SUPPORT));
+    }
+
+    public String getSubject() {
+        return subject;
     }
 
     public String getEmail() {

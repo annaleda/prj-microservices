@@ -35,6 +35,24 @@ public class Order {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /**
+     * Identificativo dell'utente che ha creato l'ordine: il claim "sub"
+     * del token, assegnato dall'identity provider.
+     *
+     * E' questo, e non l'email, a determinare di chi e' l'ordine.
+     * L'email si puo' cambiare e chiunque puo' dichiararla al momento
+     * della registrazione: legare la proprieta' a quella significherebbe
+     * che registrarsi con l'indirizzo di un altro basta per vederne gli
+     * ordini.
+     *
+     * Nullo sugli ordini creati prima che esistesse l'autenticazione:
+     * non sono attribuibili a nessuna identita', e restano visibili solo
+     * al personale interno.
+     */
+    @Column(name = "customer_id")
+    private String customerId;
+
+    /** Conservata per mostrarla e per le notifiche, non per autorizzare. */
     @Column(name = "customer_email", nullable = false)
     private String customerEmail;
 

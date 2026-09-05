@@ -47,6 +47,13 @@ public class TestJwtSupport {
     /** Un secondo cliente, per verificare che non veda gli ordini del primo. */
     public static final String OTHER_CUSTOMER = token("other", "CUSTOMER", "other@example.com");
     public static final String SUPPORT = token("support", "SUPPORT", "support@example.com");
+    /**
+     * Utente diverso da CUSTOMER ma con la stessa email: serve a
+     * verificare che la proprieta' degli ordini dipenda dall'identita' e
+     * non dall'indirizzo dichiarato.
+     */
+    public static final String SAME_EMAIL_OTHER_ACCOUNT =
+            token("impostor", "CUSTOMER", "customer@example.com");
 
     public static String token(String username, String roles, String email) {
         String payload = username + ":" + roles + ":" + email;

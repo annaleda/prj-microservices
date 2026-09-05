@@ -7,6 +7,7 @@ import { OAuthModule } from 'angular-oauth2-oidc';
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
 import { CheckoutComponent } from './pages/checkout/checkout.component';
+import { OrdersComponent } from './pages/orders/orders.component';
 import { ProductDetailComponent } from './pages/product-detail/product-detail.component';
 import { ProductListComponent } from './pages/product-list/product-list.component';
 import { AuthService } from './services/auth.service';
@@ -16,7 +17,8 @@ import { AuthService } from './services/auth.service';
     AppComponent,
     ProductListComponent,
     ProductDetailComponent,
-    CheckoutComponent
+    CheckoutComponent,
+    OrdersComponent
   ],
   imports: [
     BrowserModule,

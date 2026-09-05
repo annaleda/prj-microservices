@@ -1,0 +1,47 @@
+<section class="orders">
+  <h1>I miei ordini</h1>
+
+  <p *ngIf="loading">Caricamento…</p>
+
+  <ng-container *ngIf="!loading">
+    <p *ngIf="!auth.isLoggedIn" class="orders__empty">
+      Per vedere i tuoi ordini devi
+      <a href="javascript:void(0)" (click)="auth.login()">accedere</a>.
+    </p>
+
+    <p *ngIf="error" class="orders__error">{{ error }}</p>
+
+    <p *ngIf="auth.isLoggedIn && !error && orders.length === 0" class="orders__empty">
+      Non hai ancora effettuato ordini. <a routerLink="/">Vai al catalogo</a>.
+    </p>
+
+    <table *ngIf="orders.length">
+      <thead>
+        <tr>
+          <th>Ordine</th>
+          <th>Data</th>
+          <th>Articoli</th>
+          <th>Totale</th>
+          <th>Stato</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let order of orders">
+          <td>#{{ order.id }}</td>
+          <td>{{ order.createdAt | date: 'dd/MM/yyyy HH:mm' }}</td>
+          <td>
+            {{ itemCount(order) }}
+            <span class="orders__items">{{ order.items[0].productName }}<ng-container
+                *ngIf="order.items.length > 1"> e altri</ng-container></span>
+          </td>
+          <td>{{ order.totalAmount | currency: 'EUR' }}</td>
+          <td>
+            <span class="orders__status" [ngClass]="'orders__status--' + order.status.toLowerCase()">
+              {{ statusLabel(order.status) }}
+            </span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </ng-container>
+</section>

@@ -49,6 +49,16 @@ export class ProductListComponent implements OnInit {
     this.selectedCategoryId$.next(categoryId === '' ? null : Number(categoryId));
   }
 
+  /**
+   * Colore della banda al posto della foto: derivato dal nome, cosi' lo
+   * stesso prodotto ha sempre la stessa tinta e prodotti diversi si
+   * distinguono, senza dover salvare nulla.
+   */
+  thumbnail(product: Product): string {
+    const hue = [...product.name].reduce((acc, char) => acc + char.charCodeAt(0), 0) % 360;
+    return `linear-gradient(135deg, hsl(${hue} 62% 58%), hsl(${(hue + 38) % 360} 68% 46%))`;
+  }
+
   addToCart(product: Product, event: Event): void {
     event.preventDefault();
     event.stopPropagation();

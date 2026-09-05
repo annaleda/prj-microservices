@@ -14,6 +14,14 @@ export class OrderService {
     return this.http.post<OrderResponse>(this.baseUrl, request);
   }
 
+  /**
+   * Ordini del cliente collegato. Il filtro non lo fa il frontend: il
+   * backend restituisce solo gli ordini di chi presenta il token.
+   */
+  getOrders(): Observable<OrderResponse[]> {
+    return this.http.get<OrderResponse[]>(this.baseUrl);
+  }
+
   getOrder(id: number): Observable<OrderResponse> {
     return this.http.get<OrderResponse>(`${this.baseUrl}/${id}`);
   }

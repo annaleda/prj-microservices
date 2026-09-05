@@ -764,3 +764,90 @@ topic dell'event catalog senza consumer), Observability (Phase 5, ora
 che c'e' un correlationId da propagare in un flusso a quattro
 servizi), oppure il deploy vero su cluster kind - in sospeso da tre
 sessioni, e ora con in piu' la questione dell'issuer da risolvere.
+
+### 16. Il carrello non sopravviveva al login (bug introdotto dalla 15)
+
+Domanda dell'utente: "se non ho acceduto, mi permette di aggiungere al
+carrello lo stesso?". Si', e il comportamento in se' e' quello giusto -
+il carrello anonimo e' lo standard nei negozi, si sfoglia, si aggiunge e
+il login si chiede alla cassa. Il problema era cosa succedeva dopo.
+
+Il carrello viveva **solo in memoria** (scelta annotata nella sezione
+11: "si perde al refresh, sufficiente per il test manuale"). Con il
+login OIDC quella scelta e' diventata un difetto: `initCodeFlow()` e' un
+redirect vero, la pagina lascia l'applicazione e torna ricaricata.
+Percorso reale: aggiungi al carrello -> cassa -> "devi accedere" ->
+accedi -> **torni con il carrello vuoto**. Il login distruggeva
+esattamente cio' che doveva sbloccare.
+
+**Fix**: `CartService` persiste in `localStorage` (scritture e letture
+protette da try/catch: in finestra anonima o con storage negato il
+carrello continua a funzionare in memoria invece di far esplodere
+l'app). Aggiunto anche lo svuotamento del carrello al logout, altrimenti
+chi usa lo stesso computer dopo si troverebbe la spesa di qualcun altro.
+
+**Primi test frontend del progetto**, perche' "compila" non dimostrava
+niente su un bug di persistenza: 4 test su `CartService` in Chrome
+headless (`ng test --watch=false --browsers=ChromeHeadless`), fra cui
+quello che simula il redirect di login costruendo una seconda istanza
+del servizio - e' esattamente cio' che accade al ritorno da Keycloak.
+Sistemati anche i 3 test generati dal CLI su `AppComponent`, che non
+reggevano piu' da quando il componente inietta `AuthService`: ora ne
+ricevono uno finto. Totale 7/7.
+
+Lezione: una scelta puo' essere corretta quando viene presa e diventare
+un bug per via di qualcosa aggiunto dopo, senza che nessuno tocchi il
+codice in questione.
+
+### 17. Icona carrello e storico ordini in Customer Web
+
+Su richiesta dell'utente: la scritta "Carrello (N)" nell'header e'
+diventata un'**icona** con il contatore come badge, e accanto e' stata
+aggiunta una pagina **"I miei ordini"**.
+
+Dettagli di resa:
+- icone SVG scritte a mano invece di una libreria di icone: due sole
+  icone non giustificano una dipendenza in piu';
+- il badge del contatore non viene disegnato con zero articoli
+  (l'espressione e' falsy e `*ngIf` lo salta): uno "0" perenne accanto
+  al carrello e' rumore;
+- togliendo il testo servono le etichette per chi non vede l'icona:
+  `title` e `aria-label` su entrambi i link, con il numero di articoli
+  dentro l'etichetta del carrello;
+- lo storico compare solo da collegati - da disconnessi darebbe 401 -
+  ma la pagina raggiunta direttamente via URL non esplode: mostra
+  l'invito ad accedere, e distingue la sessione scaduta (401) da un
+  errore del servizio.
+
+**Corretto anche il backend**: `GET /api/orders` restituiva gli ordini
+senza ordinamento esplicito, quindi il database era libero di darli
+come capitava - uno "storico" cosi' non e' uno storico. Ora arrivano
+dal piu' recente (`findByCustomerEmailOrderByCreatedAtDesc` per i
+clienti, `Sort` su `createdAt` per il personale interno), con un test
+che lo verifica: 12/12 in Order Service, 7/7 nei test frontend.
+
+Verificato dal vivo attraverso il proxy: quattro ordini dello stesso
+cliente, dal piu' recente al piu' vecchio, con stato e totale corretti.
+
+### 18. Nessun modo evidente di tornare al catalogo
+
+Segnalazione dell'utente: dallo storico non si torna al catalogo. Vero
+solo in parte - il nome del negozio nell'header e' un link alla home -
+ma il punto era giusto: non e' un appiglio evidente, e con la lista
+degli ordini piena non c'era nient'altro (il link "Vai al catalogo"
+compariva solo nello stato vuoto). Stesso problema sul checkout con il
+carrello pieno.
+
+Aggiunta quindi una **terza icona per il catalogo** nell'header
+(griglia di prodotti), accanto a storico e carrello, invece di rattoppare
+la singola pagina: cosi' il modo per tornare indietro e' lo stesso
+ovunque. Tutte e tre hanno `routerLinkActive`, per far vedere in che
+sezione ci si trova. La prima versione era un link testuale "Catalogo";
+sostituito con l'icona su richiesta dell'utente, per coerenza con le
+altre due.
+
+**Verifica con screenshot** (Chrome headless su `localhost:4200`, non
+solo "compila"): sul catalogo l'icona a griglia risulta attiva e quella
+del carrello no, sul checkout si invertono - e le icone si vedono e
+sono allineate, cosa che nessun test automatico del progetto avrebbe
+colto.

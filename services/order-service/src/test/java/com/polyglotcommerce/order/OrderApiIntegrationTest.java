@@ -32,6 +32,7 @@ import static com.polyglotcommerce.order.TestJwtSupport.ADMIN;
 import static com.polyglotcommerce.order.TestJwtSupport.ANONYMOUS;
 import static com.polyglotcommerce.order.TestJwtSupport.CUSTOMER;
 import static com.polyglotcommerce.order.TestJwtSupport.OTHER_CUSTOMER;
+import static com.polyglotcommerce.order.TestJwtSupport.SAME_EMAIL_OTHER_ACCOUNT;
 import static com.polyglotcommerce.order.TestJwtSupport.SUPPORT;
 import static com.polyglotcommerce.order.TestJwtSupport.as;
 
@@ -209,6 +210,35 @@ class OrderApiIntegrationTest {
             }
         }
         throw new AssertionError("Condition not met within 20s");
+    }
+
+    @Test
+    void theOrderListStartsFromTheMostRecent() {
+        OrderResponse older = createOrderAs(CUSTOMER);
+        OrderResponse newer = createOrderAs(CUSTOMER);
+
+        List<OrderResponse> orders = List.of(restTemplate.exchange(
+                "/api/orders", HttpMethod.GET, as(CUSTOMER), OrderResponse[].class).getBody());
+
+        // La lista e' uno storico: il piu' recente per primo.
+        assertThat(orders).extracting(OrderResponse::getId)
+                .containsSubsequence(newer.getId(), older.getId());
+    }
+
+    @Test
+    void anotherAccountWithTheSameEmailSeesNothing() {
+        OrderResponse mine = createOrderAs(CUSTOMER);
+
+        // Stessa email dichiarata, identita' diversa. L'email non e' una
+        // prova di identita': chiunque puo' registrarsi dichiarando
+        // l'indirizzo di un altro, tanto piu' dove non viene verificata.
+        ResponseEntity<OrderResponse[]> list = restTemplate.exchange(
+                "/api/orders", HttpMethod.GET, as(SAME_EMAIL_OTHER_ACCOUNT), OrderResponse[].class);
+        assertThat(list.getBody()).extracting(OrderResponse::getId).doesNotContain(mine.getId());
+
+        ResponseEntity<String> direct = restTemplate.exchange(
+                "/api/orders/" + mine.getId(), HttpMethod.GET, as(SAME_EMAIL_OTHER_ACCOUNT), String.class);
+        assertThat(direct.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     }
 
     @Test

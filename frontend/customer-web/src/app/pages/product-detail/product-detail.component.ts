@@ -34,6 +34,12 @@ export class ProductDetailComponent implements OnInit {
     );
   }
 
+  /** Stessa banda colorata della lista, cosi' il prodotto si riconosce. */
+  thumbnail(product: Product): string {
+    const hue = [...product.name].reduce((acc, char) => acc + char.charCodeAt(0), 0) % 360;
+    return `linear-gradient(135deg, hsl(${hue} 62% 58%), hsl(${(hue + 38) % 360} 68% 46%))`;
+  }
+
   addToCart(product: Product): void {
     this.cartService.add(product);
   }

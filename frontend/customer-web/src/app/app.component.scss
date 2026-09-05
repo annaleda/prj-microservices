@@ -1,25 +1,121 @@
 .app-header {
-  padding: 1rem 2rem;
-  border-bottom: 1px solid #eee;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  padding: 0.9rem 2rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 1rem;
 
   &__brand {
-    font-size: 1.25rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    font-size: 1.1rem;
     font-weight: 700;
+    letter-spacing: -0.02em;
     text-decoration: none;
-    color: #222;
+    color: var(--ink);
   }
 
-  &__cart {
+  // Monogramma al posto di un logo vero.
+  &__mark {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    background: linear-gradient(135deg, var(--brand), #7c3aed);
+    color: #fff;
+    font-size: 0.95rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &__nav {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  // Icone di catalogo, storico ordini e carrello.
+  &__action {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: var(--radius-sm);
+    color: var(--ink-muted);
     text-decoration: none;
-    color: #222;
+    transition: background 0.15s ease, color 0.15s ease;
+
+    svg {
+      width: 21px;
+      height: 21px;
+      display: block;
+    }
+
+    &:hover {
+      background: var(--surface-sunken);
+      color: var(--ink);
+    }
+
+    // Dove ci si trova adesso.
+    &--active {
+      background: var(--brand-soft);
+      color: var(--brand);
+    }
+  }
+
+  // Contatore degli articoli, appoggiato all'angolo dell'icona.
+  &__badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    min-width: 17px;
+    height: 17px;
+    padding: 0 4px;
+    border-radius: var(--radius-pill);
+    background: var(--brand);
+    color: #fff;
+    font-size: 0.68rem;
+    line-height: 17px;
+    text-align: center;
+    font-weight: 700;
+    box-shadow: 0 0 0 2px var(--surface);
+  }
+
+  &__auth {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-left: 0.6rem;
+    padding-left: 0.9rem;
+    border-left: 1px solid var(--border);
+    font-size: 0.9rem;
+    color: var(--ink-muted);
+  }
+
+  &__user {
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  // Comandi di accesso: sono azioni, non link di navigazione.
+  &__auth button {
+    padding: 0.4rem 0.85rem;
+    font-size: 0.85rem;
   }
 }
 
 .app-main {
-  padding: 1.5rem 2rem;
-  max-width: 1000px;
+  padding: 2rem;
+  max-width: 1040px;
   margin: 0 auto;
 }

@@ -17,6 +17,7 @@ import com.polyglotcommerce.order.security.Caller;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,8 +48,8 @@ public class OrderService {
     @Transactional(readOnly = true)
     public List<OrderResponse> findAllFor(Caller caller) {
         List<Order> orders = caller.isStaff()
-                ? orderRepository.findAll()
-                : orderRepository.findByCustomerEmail(caller.getEmail());
+                ? orderRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt"))
+                : orderRepository.findByCustomerIdOrderByCreatedAtDesc(caller.getSubject());
 
         return orders.stream()
                 .map(OrderResponse::fromEntity)
@@ -59,7 +60,10 @@ public class OrderService {
     public OrderResponse findByIdFor(Long id, Caller caller) {
         Order order = getOrderOrThrow(id);
 
-        if (!caller.isStaff() && !order.getCustomerEmail().equals(caller.getEmail())) {
+        // Il confronto e' sull'identificativo dell'utente: un ordine senza
+        // (creato prima dell'autenticazione) non appartiene a nessun
+        // account e resta visibile al solo personale interno.
+        if (!caller.isStaff() && !caller.getSubject().equals(order.getCustomerId())) {
             // 403 e non 404: l'ordine esiste, semplicemente non e' suo.
             throw new AccessDeniedException("Order " + id + " belongs to another customer");
         }
@@ -70,6 +74,7 @@ public class OrderService {
     @Transactional
     public OrderResponse create(OrderRequest request, Caller caller) {
         Order order = Order.builder()
+                .customerId(caller.getSubject())
                 .customerEmail(caller.getEmail())
                 .status(OrderStatus.CREATED)
                 .totalAmount(BigDecimal.ZERO)

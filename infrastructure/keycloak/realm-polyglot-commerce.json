@@ -1,18 +1,47 @@
 {
   "realm": "polyglot-commerce",
-  "displayName": "Polyglot Commerce Platform",
+  "displayName": "Polyglot Commerce",
   "enabled": true,
-  "registrationAllowed": false,
+  "registrationAllowed": true,
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
   "sslRequired": "none",
   "accessTokenLifespan": 1800,
   "roles": {
     "realm": [
-      { "name": "CUSTOMER", "description": "Cliente: sfoglia il catalogo e crea i propri ordini" },
-      { "name": "ADMIN", "description": "Amministratore: gestione catalogo e visione di tutti gli ordini" },
-      { "name": "WAREHOUSE", "description": "Magazzino: gestione delle scorte e delle prenotazioni" },
-      { "name": "SUPPORT", "description": "Assistenza clienti: sola lettura su ordini e pagamenti" }
+      {
+        "name": "CUSTOMER",
+        "description": "Cliente: sfoglia il catalogo e crea i propri ordini"
+      },
+      {
+        "name": "ADMIN",
+        "description": "Amministratore: gestione catalogo e visione di tutti gli ordini"
+      },
+      {
+        "name": "WAREHOUSE",
+        "description": "Magazzino: gestione delle scorte e delle prenotazioni"
+      },
+      {
+        "name": "SUPPORT",
+        "description": "Assistenza clienti: sola lettura su ordini e pagamenti"
+      },
+      {
+        "name": "default-roles-polyglot-commerce",
+        "description": "Ruoli assegnati automaticamente a ogni nuovo utente",
+        "composite": true,
+        "composites": {
+          "realm": [
+            "CUSTOMER"
+          ],
+          "client": {
+            "account": [
+              "view-profile",
+              "manage-account"
+            ]
+          }
+        },
+        "clientRole": false
+      }
     ]
   },
   "clients": [
@@ -25,8 +54,12 @@
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": false,
-      "redirectUris": ["http://localhost:4200/*"],
-      "webOrigins": ["http://localhost:4200"],
+      "redirectUris": [
+        "http://localhost:4200/*"
+      ],
+      "webOrigins": [
+        "http://localhost:4200"
+      ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "http://localhost:4200/*"
@@ -41,8 +74,12 @@
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": false,
-      "redirectUris": ["http://localhost:5173/*"],
-      "webOrigins": ["http://localhost:5173"],
+      "redirectUris": [
+        "http://localhost:5173/*"
+      ],
+      "webOrigins": [
+        "http://localhost:5173"
+      ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "http://localhost:5173/*"
@@ -57,8 +94,16 @@
       "email": "customer@example.com",
       "firstName": "Carla",
       "lastName": "Cliente",
-      "credentials": [{ "type": "password", "value": "customer", "temporary": false }],
-      "realmRoles": ["CUSTOMER"]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "customer",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "CUSTOMER"
+      ]
     },
     {
       "username": "admin",
@@ -67,8 +112,16 @@
       "email": "admin@example.com",
       "firstName": "Anna",
       "lastName": "Admin",
-      "credentials": [{ "type": "password", "value": "admin", "temporary": false }],
-      "realmRoles": ["ADMIN"]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "ADMIN"
+      ]
     },
     {
       "username": "warehouse",
@@ -77,8 +130,30 @@
       "email": "warehouse@example.com",
       "firstName": "Walter",
       "lastName": "Magazzino",
-      "credentials": [{ "type": "password", "value": "warehouse", "temporary": false }],
-      "realmRoles": ["WAREHOUSE"]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "warehouse",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "WAREHOUSE"
+      ]
     }
-  ]
+  ],
+  "registrationEmailAsUsername": false,
+  "loginTheme": "polyglot",
+  "resetPasswordAllowed": true,
+  "defaultRole": {
+    "name": "default-roles-polyglot-commerce",
+    "description": "Ruoli assegnati automaticamente a ogni nuovo utente",
+    "composite": true,
+    "clientRole": false
+  },
+  "internationalizationEnabled": true,
+  "supportedLocales": [
+    "it"
+  ],
+  "defaultLocale": "it"
 }

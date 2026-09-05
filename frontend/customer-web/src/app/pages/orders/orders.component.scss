@@ -1,0 +1,77 @@
+.orders {
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+  }
+
+  th {
+    text-align: left;
+    padding: 0.75rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-faint);
+    background: var(--surface-sunken);
+    border-bottom: 1px solid var(--border);
+  }
+
+  td {
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  &__items {
+    color: var(--ink-muted);
+    font-size: 0.85rem;
+    margin-left: 0.35rem;
+  }
+
+  &__status {
+    display: inline-block;
+    padding: 0.2rem 0.65rem;
+    border-radius: var(--radius-pill);
+    font-size: 0.78rem;
+    font-weight: 600;
+
+    &--created {
+      background: var(--warning-soft);
+      color: var(--warning);
+    }
+
+    &--confirmed {
+      background: var(--success-soft);
+      color: var(--success);
+    }
+
+    &--cancelled {
+      background: var(--danger-soft);
+      color: var(--danger);
+    }
+  }
+
+  &__empty {
+    padding: 2.5rem 1.5rem;
+    text-align: center;
+    color: var(--ink-muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  &__error {
+    padding: 0.85rem 1rem;
+    border-radius: var(--radius-sm);
+    background: var(--danger-soft);
+    color: var(--danger);
+  }
+}

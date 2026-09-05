@@ -1,0 +1,214 @@
+/* Grafica delle pagine di Keycloak (accesso, registrazione, recupero
+   password) allineata a Customer Web: stessi colori, stessa tipografia,
+   stessa forma di campi e pulsanti.
+
+   I nomi delle classi sono quelli generati dai template del tema
+   "keycloak" (PatternFly): qui si interviene solo sull'aspetto. */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  --pc-brand: #4f46e5;
+  --pc-brand-strong: #4338ca;
+  --pc-brand-soft: #eef2ff;
+  --pc-ink: #101828;
+  --pc-ink-muted: #667085;
+  --pc-border: #e4e7ec;
+  --pc-surface: #ffffff;
+  --pc-danger: #b42318;
+  --pc-danger-soft: #fef3f2;
+}
+
+/* --- Sfondo --------------------------------------------------------- */
+
+html {
+  height: 100%;
+}
+
+body.login-pf,
+.login-pf body {
+  background: radial-gradient(1200px 600px at 50% -10%, #e9e7fd 0%, #f7f8fb 55%, #f7f8fb 100%);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  color: var(--pc-ink);
+}
+
+.login-pf-page {
+  padding-top: 3.5rem;
+}
+
+/* --- Intestazione: monogramma + nome, come nell'applicazione --------- */
+
+#kc-header-wrapper {
+  padding: 0 0 1.25rem;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--pc-ink);
+  text-transform: none;
+  line-height: 1.3;
+}
+
+#kc-header-wrapper::before {
+  content: 'PC';
+  display: block;
+  width: 46px;
+  height: 46px;
+  margin: 0 auto 0.85rem;
+  border-radius: 13px;
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+  color: #fff;
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 46px;
+  letter-spacing: 0;
+}
+
+/* Il logo Keycloak del tema originale: qui il marchio e' un altro. */
+.login-pf-brand {
+  display: none;
+}
+
+/* --- La scheda ------------------------------------------------------ */
+
+.login-pf-page .card-pf {
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 2rem;
+  background: var(--pc-surface);
+  border: 1px solid var(--pc-border);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(16, 24, 40, 0.1);
+}
+
+#kc-page-title {
+  margin: 0 0 1.5rem;
+  font-size: 1.2rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--pc-ink);
+}
+
+/* --- Campi ---------------------------------------------------------- */
+
+.pf-c-form__label,
+.pf-c-form__label-text,
+#kc-form-login label,
+.control-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--pc-ink-muted);
+}
+
+input.pf-c-form-control,
+.form-control,
+#kc-form-login input[type='text'],
+#kc-form-login input[type='password'] {
+  width: 100%;
+  height: auto;
+  padding: 0.6rem 0.75rem;
+  font-family: inherit;
+  font-size: 0.95rem;
+  color: var(--pc-ink);
+  background: var(--pc-surface);
+  border: 1px solid var(--pc-border);
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+input.pf-c-form-control:focus,
+.form-control:focus {
+  border-color: var(--pc-brand);
+  box-shadow: 0 0 0 3px var(--pc-brand-soft);
+  outline: none;
+}
+
+.form-group {
+  margin-bottom: 1.1rem;
+}
+
+/* --- Pulsanti ------------------------------------------------------- */
+
+.pf-c-button.pf-m-primary,
+input[type='submit'].pf-c-button,
+#kc-login {
+  width: 100%;
+  padding: 0.65rem 1.1rem;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--pc-brand);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  transition: background 0.15s ease;
+}
+
+.pf-c-button.pf-m-primary:hover,
+#kc-login:hover {
+  background: var(--pc-brand-strong);
+}
+
+/* --- Link e testi accessori ----------------------------------------- */
+
+a {
+  color: var(--pc-brand);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+a:hover {
+  color: var(--pc-brand-strong);
+  text-decoration: underline;
+}
+
+#kc-registration,
+#kc-registration-container,
+#kc-form-options,
+.login-pf-settings {
+  font-size: 0.9rem;
+  color: var(--pc-ink-muted);
+}
+
+/* Il tema originale mette il richiamo alla registrazione in una fascia
+   grigia con un riquadro dentro: qui diventa un semplice piede separato
+   da una riga, dentro la stessa scheda del modulo. */
+#kc-registration-container,
+#kc-registration,
+#kc-info,
+#kc-info-wrapper,
+.pf-c-login__main-footer-band,
+.login-pf-page .login-pf-signup {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--pc-ink-muted);
+}
+
+#kc-registration-container,
+#kc-info {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--pc-border);
+}
+
+/* --- Messaggi di errore --------------------------------------------- */
+
+.pf-c-alert.pf-m-danger,
+.alert-error {
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.1rem;
+  background: var(--pc-danger-soft);
+  border: 1px solid rgba(180, 35, 24, 0.2);
+  border-radius: 8px;
+  color: var(--pc-danger);
+  font-size: 0.9rem;
+}
+
+.pf-c-alert.pf-m-danger .pf-c-alert__title {
+  color: var(--pc-danger);
+}

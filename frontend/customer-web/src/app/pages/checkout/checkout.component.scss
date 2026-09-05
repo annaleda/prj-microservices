@@ -1,44 +1,102 @@
 .checkout {
-  max-width: 480px;
+  max-width: 620px;
+
+  &__panel {
+    padding: 1.5rem;
+  }
 
   table {
     width: 100%;
     border-collapse: collapse;
-    margin-bottom: 1rem;
   }
 
-  th,
-  td {
+  th {
     text-align: left;
-    padding: 0.4rem 0.3rem;
-    border-bottom: 1px solid #eee;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-faint);
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  td {
+    padding: 0.7rem 0;
+    border-bottom: 1px solid var(--border);
   }
 
   &__total {
-    margin-bottom: 1rem;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding-top: 1rem;
+    font-size: 1.15rem;
+
+    span {
+      color: var(--ink-muted);
+      font-size: 0.95rem;
+    }
+
+    strong {
+      font-size: 1.3rem;
+      letter-spacing: -0.02em;
+    }
+  }
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 1.25rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+  }
+
+  &__note {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--ink-muted);
+  }
+
+  &__order {
+    margin: 0 0 0.75rem;
+    font-size: 1.05rem;
+  }
+
+  &__empty {
+    padding: 2.5rem 1.5rem;
+    text-align: center;
+    color: var(--ink-muted);
+
+    p {
+      margin: 0 0 0.5rem;
+    }
+  }
+
+  // Esiti della saga.
+  &__pending,
+  &__success,
+  &__error {
+    margin: 0;
+    padding: 0.85rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.95rem;
+  }
+
+  &__pending {
+    background: var(--warning-soft);
+    color: var(--warning);
   }
 
   &__success {
-    color: #1a7a34;
+    background: var(--success-soft);
+    color: var(--success);
   }
 
   &__error {
-    color: #b00020;
-  }
-
-  label {
-    display: flex;
-    flex-direction: column;
-    gap: 0.3rem;
-    margin-bottom: 1rem;
-    font-size: 0.9rem;
-    color: #444;
-  }
-
-  input,
-  select {
-    padding: 0.4em 0.5em;
-    border: 1px solid #ccc;
-    border-radius: 6px;
+    background: var(--danger-soft);
+    color: var(--danger);
   }
 }
