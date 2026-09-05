@@ -19,7 +19,15 @@ router = APIRouter()
 warehouse_only = require_roles("WAREHOUSE", "ADMIN")
 
 
-@router.get("/{product_id}", response_model=InventoryResponse)
+@router.get(
+    "/{product_id}",
+    response_model=InventoryResponse,
+    summary="Scorte di un prodotto",
+    responses={
+        404: {"description": "Il magazzino non ha una riga per questo prodotto"},
+        401: {"description": "Token assente o non valido"},
+    },
+)
 def get_inventory(
     product_id: int,
     db: Session = Depends(get_db),
@@ -31,7 +39,16 @@ def get_inventory(
         raise HTTPException(status_code=404, detail=str(error))
 
 
-@router.put("/{product_id}", response_model=InventoryResponse)
+@router.put(
+    "/{product_id}",
+    response_model=InventoryResponse,
+    summary="Dichiara le scorte disponibili (rifornimento)",
+    responses={
+        200: {"description": "Scorte aggiornate"},
+        401: {"description": "Token assente o non valido"},
+        403: {"description": "Serve il ruolo WAREHOUSE o ADMIN"},
+    },
+)
 def set_stock(
     product_id: int,
     request: StockUpdateRequest,
@@ -48,7 +65,18 @@ def set_stock(
     return inventory_service.set_available(db, product_id, request.quantity_available)
 
 
-@router.post("/reservations", response_model=ReservationResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/reservations",
+    response_model=ReservationResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Prenota manualmente una quantita'",
+    responses={
+        201: {"description": "Prenotazione creata"},
+        404: {"description": "Prodotto sconosciuto al magazzino"},
+        409: {"description": "Scorte disponibili insufficienti"},
+        403: {"description": "Serve il ruolo WAREHOUSE o ADMIN"},
+    },
+)
 def create_reservation(
     request: ReservationRequest,
     db: Session = Depends(get_db),
@@ -66,7 +94,16 @@ def create_reservation(
     return reservation
 
 
-@router.delete("/reservations/{reservation_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/reservations/{reservation_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Rilascia una prenotazione",
+    responses={
+        204: {"description": "Prenotazione rilasciata, scorte ripristinate"},
+        404: {"description": "Prenotazione inesistente"},
+        403: {"description": "Serve il ruolo WAREHOUSE o ADMIN"},
+    },
+)
 def release_reservation(
     reservation_id: int,
     db: Session = Depends(get_db),

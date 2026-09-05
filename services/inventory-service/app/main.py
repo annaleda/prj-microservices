@@ -71,7 +71,22 @@ async def lifespan(app: FastAPI):
     producer.shutdown()
 
 
-app = FastAPI(title="Inventory Service", version="0.1.0", lifespan=lifespan)
+app = FastAPI(
+    title="Inventory Service",
+    version="0.1.0",
+    description="""Scorte di magazzino.
+
+Il percorso normale **non passa da queste API**: le prenotazioni nascono
+dall'evento `order.created` consumato da Kafka, e vengono rilasciate su
+`order.cancelled`. Gli endpoint servono al personale di magazzino e alle
+prove manuali.
+
+Il rifornimento (`PUT /api/inventory/{productId}`) e' l'**unico** modo di
+aumentare le scorte: la saga sa solo riservare e rilasciare, e un prodotto
+appena creato nasce a zero pezzi.
+""",
+    lifespan=lifespan,
+)
 app.include_router(inventory_router, prefix="/api/inventory", tags=["inventory"])
 
 
