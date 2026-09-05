@@ -1,0 +1,77 @@
+{{- range $name, $svc := .Values.services }}
+{{- $probePath := $svc.probePath | default "/actuator/health" }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Values.namespace.name }}
+  labels:
+    {{- include "polyglot.labels" (dict "name" $name "release" $.Release.Name "chart" (printf "%s-%s" $.Chart.Name $.Chart.Version)) | nindent 4 }}
+spec:
+  replicas: {{ $svc.replicas | default $.Values.defaults.replicas }}
+  selector:
+    matchLabels:
+      {{- include "polyglot.selectorLabels" (dict "name" $name) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "polyglot.selectorLabels" (dict "name" $name) | nindent 8 }}
+      annotations:
+        # Rilancia i pod quando cambia la configurazione: senza, un
+        # `helm upgrade` che tocca solo la ConfigMap non fa ripartire
+        # nulla e i pod continuano con i valori vecchi. E' il trucco piu'
+        # utile che Kustomize non offre altrettanto comodamente.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") $ | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") $ | sha256sum }}
+    spec:
+      containers:
+        - name: {{ $name }}
+          image: {{ include "polyglot.image" (dict "repository" $.Values.image.repository "name" $name "tag" $.Values.image.tag) }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ $svc.port }}
+          envFrom:
+            - configMapRef:
+                name: {{ $name }}-config
+            {{- if or $svc.database $svc.features.minio }}
+            - secretRef:
+                name: {{ $name }}-secret
+            {{- end }}
+          {{- if eq $svc.probes "spring" }}
+          # Spring Boot Actuator espone i gruppi readiness e liveness
+          # separati; richiede management.endpoint.health.probes.enabled.
+          readinessProbe:
+            httpGet:
+              path: {{ $probePath }}/readiness
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: {{ $probePath }}/liveness
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          {{- else }}
+          # Un solo endpoint per entrambe: e' il caso di FastAPI, che
+          # espone /health e basta. Meno preciso di una readiness che
+          # verifichi davvero la connessione al database, ma coerente con
+          # cio' che il servizio offre.
+          readinessProbe:
+            httpGet:
+              path: {{ $probePath }}
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: {{ $probePath }}
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          {{- end }}
+          resources:
+            {{- toYaml ($svc.resources | default $.Values.defaults.resources) | nindent 12 }}
+{{- end }}

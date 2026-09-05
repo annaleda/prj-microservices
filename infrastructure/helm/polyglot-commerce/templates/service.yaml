@@ -1,0 +1,18 @@
+{{- range $name, $svc := .Values.services }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Values.namespace.name }}
+  labels:
+    {{- include "polyglot.labels" (dict "name" $name "release" $.Release.Name "chart" (printf "%s-%s" $.Chart.Name $.Chart.Version)) | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "polyglot.selectorLabels" (dict "name" $name) | nindent 4 }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+{{- end }}

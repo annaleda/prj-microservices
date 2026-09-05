@@ -1,0 +1,149 @@
+# Valori di default del chart.
+#
+# Sono quelli di un cluster in cui *tutto* gira dentro Kubernetes:
+# database, Kafka, Keycloak e MinIO raggiungibili per nome di servizio.
+# Per l'ambiente locale, dove quelle dipendenze girano su docker-compose
+# sull'host, vedi values-local.yaml.
+
+namespace:
+  # Il chart crea il namespace. In molte organizzazioni lo crea invece la
+  # piattaforma e questo va messo a false, perche' un chart applicativo
+  # non dovrebbe poter creare namespace.
+  create: true
+  name: polyglot-commerce
+
+image:
+  # Vuoto = immagini gia' presenti sul nodo (e' il caso di `kind load`).
+  # In un registry vero: registry.example.com/polyglot-commerce
+  repository: polyglot-commerce
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+# Gateway API (Envoy Gateway). Il *controller* non fa parte di questo
+# chart: e' infrastruttura di cluster, si installa a parte con Helm.
+gateway:
+  enabled: true
+  name: polyglot-commerce-gateway
+  className: envoy-gateway
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+  port: 80
+
+# Dipendenze esterne ai servizi applicativi.
+kafka:
+  bootstrapServers: kafka:9092
+
+keycloak:
+  # Attenzione: non serve solo a *raggiungere* Keycloak, decide anche
+  # quale `iss` e' accettabile nei token. Deve essere lo stesso URL da cui
+  # il browser ottiene i token, altrimenti i servizi li rifiutano tutti
+  # pur essendo la firma valida.
+  issuerUri: http://keycloak:8080/realms/polyglot-commerce
+
+minio:
+  endpoint: http://minio:9000
+  bucket: product-images
+  # Credenziali di sviluppo. In staging/produzione vanno da un secret
+  # manager esterno (External Secrets, Vault), mai qui dentro.
+  accessKey: minioadmin
+  secretKey: minioadmin
+
+# Valori applicati a tutti i servizi se non sovrascritti dal singolo.
+defaults:
+  replicas: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# I microservizi. Ognuno genera ConfigMap, Deployment, Service e, se ha
+# rotte, un HTTPRoute; se ha un database, anche un Secret.
+#
+# `probes` sceglie lo stile: `spring` usa i gruppi readiness/liveness di
+# Actuator, `simple` un unico endpoint (FastAPI espone solo /health).
+services:
+  catalog-service:
+    port: 8081
+    probes: spring
+    routes:
+      - /api/products
+      - /api/categories
+    database:
+      envPrefix: CATALOG
+      host: catalog-db
+      port: "5432"
+      name: catalog
+      user: catalog
+      password: catalog
+    features:
+      kafka: true
+      keycloak: true
+      # Il catalogo e' l'unico che carica immagini sull'object storage.
+      minio: true
+
+  order-service:
+    port: 8082
+    probes: spring
+    routes:
+      - /api/orders
+    database:
+      envPrefix: ORDERS
+      host: orders-db
+      port: "5432"
+      name: orders
+      user: orders
+      password: orders
+    features:
+      kafka: true
+      keycloak: true
+
+  inventory-service:
+    port: 8083
+    # FastAPI espone solo /health, senza i gruppi separati di Actuator.
+    probes: simple
+    probePath: /health
+    routes:
+      - /api/inventory
+    database:
+      envPrefix: INVENTORY
+      host: inventory-db
+      port: "5432"
+      name: inventory
+      user: inventory
+      password: inventory
+    features:
+      kafka: true
+      keycloak: true
+
+  payment-service:
+    port: 8084
+    probes: spring
+    routes:
+      - /api/payments
+    database:
+      envPrefix: PAYMENTS
+      host: payments-db
+      port: "5432"
+      name: payments
+      user: payments
+      password: payments
+    features:
+      kafka: true
+      keycloak: true
+
+  integration-service:
+    port: 8085
+    probes: spring
+    # Nessuna rotta: parla solo per eventi, non espone API pubbliche.
+    routes: []
+    # Nessun database: lo stato delle saghe e' in memoria.
+    #
+    # Ed e' anche il motivo di replicas: 1 — con due repliche i passi
+    # della stessa saga finirebbero su pod che non condividono quello
+    # stato. Va portato a piu' repliche solo insieme a uno store
+    # persistente.
+    replicas: 1
+    features:
+      kafka: true

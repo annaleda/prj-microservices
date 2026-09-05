@@ -408,20 +408,26 @@ HorizontalPodAutoscaler - GatewayClass - Gateway - HTTPRoute
 Struttura:
 
 ``` text
-infrastructure/kubernetes/
-├── base/
-│   ├── auth-service/
-│   ├── catalog-service/
-│   ├── order-service/
-│   ├── payment-service/
-│   ├── inventory-service/
-│   ├── integration-service/
-│   └── analytics-service/
-└── overlays/
-    ├── local/
-    ├── staging/
-    └── production/
+infrastructure/helm/polyglot-commerce/
+├── Chart.yaml
+├── values.yaml              # default: tutto dentro il cluster
+├── values-local.yaml        # dipendenze su docker-compose (host.docker.internal)
+├── values-production.yaml   # segnaposto: cosa manca prima di deployare
+└── templates/
+    ├── _helpers.tpl
+    ├── namespace.yaml
+    ├── configmap.yaml       # un template solo, che cicla sui servizi
+    ├── secret.yaml
+    ├── deployment.yaml
+    ├── service.yaml
+    ├── httproute.yaml
+    └── gateway.yaml
 ```
+
+I servizi sono definiti in `values.yaml` come voci di una mappa
+(porta, probe, rotte, database), e i template ci ciclano sopra: aggiungere
+un microservizio significa aggiungere una decina di righe di
+configurazione, non una cartella di manifest.
 
 ## 11. Observability
 

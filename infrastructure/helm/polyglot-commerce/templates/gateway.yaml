@@ -1,0 +1,44 @@
+{{/*
+GatewayClass e Gateway.
+
+Richiedono il *controller* Envoy Gateway installato nel cluster
+(namespace envoy-gateway-system): non fa parte di questo chart, perche' e'
+infrastruttura di cluster e non applicativa. Si installa con Helm a
+parte — vedi il README di questa cartella.
+
+In un'organizzazione con ruoli separati questi due oggetti li crea la
+piattaforma e non il team applicativo: in quel caso si mette
+`gateway.enabled: false` e restano solo gli HTTPRoute.
+*/}}
+{{- if .Values.gateway.enabled }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: {{ .Values.gateway.className }}
+  labels:
+    app.kubernetes.io/part-of: polyglot-commerce
+    app.kubernetes.io/managed-by: Helm
+spec:
+  controllerName: {{ .Values.gateway.controllerName }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ .Values.gateway.name }}
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    app.kubernetes.io/part-of: polyglot-commerce
+    app.kubernetes.io/managed-by: Helm
+spec:
+  gatewayClassName: {{ .Values.gateway.className }}
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: {{ .Values.gateway.port }}
+      allowedRoutes:
+        namespaces:
+          # Solo rotte dello stesso namespace: un Gateway che accetta
+          # rotte da ovunque permette a chiunque nel cluster di
+          # dirottare traffico su di se'.
+          from: Same
+{{- end }}

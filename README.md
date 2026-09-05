@@ -361,13 +361,18 @@ ADMIN, la lettura no. La console di MinIO e' su
 
 ## 6. Avviare l'infrastruttura Kubernetes con API Gateway
 
-I manifest si trovano in `infrastructure/kubernetes/` (pattern
-base/overlays con Kustomize) e usano la **Kubernetes Gateway API**
-(non un Ingress classico), implementata con **Envoy Gateway**. Finora
-sono stati scritti e validati solo localmente (`kubectl kustomize` +
-dry-run), **non ancora testati su un cluster reale** in questa
-sessione: i passi seguenti sono la procedura prevista, da verificare
-alla prima esecuzione.
+Il deploy e' descritto da un **chart Helm** in
+`infrastructure/helm/polyglot-commerce/` (prima era un impianto
+base/overlays con Kustomize, sostituito perche' con cinque servizi quasi
+identici ogni modifica trasversale andava ripetuta cinque volte - vedi
+[infrastructure/helm/README.md](infrastructure/helm/README.md)). Usa la
+**Kubernetes Gateway API** e non un Ingress classico, implementata con
+**Envoy Gateway**.
+
+Finora il chart e' stato scritto e validato solo localmente (`helm lint`,
+`helm template`, `kubectl apply --dry-run=client`), **non ancora
+applicato a un cluster reale**: i passi seguenti sono la procedura
+prevista, da verificare alla prima esecuzione.
 
 ### Prerequisiti
 
@@ -407,21 +412,33 @@ for svc in catalog-service order-service inventory-service payment-service integ
 done
 ```
 
-### 6.4 Applicare i manifest (overlay locale)
+### 6.4 Installare il chart (valori locali)
 
 ```bash
-kubectl apply -k infrastructure/kubernetes/overlays/local
+cd infrastructure/helm/polyglot-commerce
+
+# per vedere prima cosa verrebbe applicato, senza applicarlo
+helm template polyglot . -f values-local.yaml | less
+
+helm upgrade --install polyglot . -f values-local.yaml
 kubectl -n polyglot-commerce get pods
 kubectl -n polyglot-commerce get gateway polyglot-commerce-gateway
 ```
 
-> **Nota sul database**: nel cluster non c'è (ancora) un Postgres
-> in-cluster. L'overlay `local` fa puntare ciascun servizio al proprio
-> database avviato via `docker compose` sull'host, raggiungibile da
-> dentro kind come `host.docker.internal:<porta>` (funziona su Docker
-> Desktop per Windows/Mac; su Linux potrebbe servire una configurazione
-> di rete diversa). Assicurati quindi che `docker compose up -d` (tutti
-> i database) sia attivo **prima** di applicare questo overlay.
+Per tornare indietro dopo un aggiornamento andato male:
+
+```bash
+helm history polyglot
+helm rollback polyglot <revisione>
+```
+
+> **Nota sulle dipendenze**: nel cluster non ci sono (ancora) Postgres,
+> Kafka, Keycloak e MinIO. `values-local.yaml` fa puntare ciascun
+> servizio a quelli avviati via `docker compose` sull'host, raggiungibili
+> da dentro kind come `host.docker.internal:<porta>` (funziona su Docker
+> Desktop per Windows/Mac; su Linux puo' servire una configurazione di
+> rete diversa). Assicurati quindi che `docker compose up -d` sia attivo
+> **prima** di installare il chart.
 
 ### 6.5 Esporre il Gateway e testare il routing
 

@@ -1,0 +1,20 @@
+apiVersion: v2
+name: polyglot-commerce
+description: >-
+  Piattaforma e-commerce a microservizi: catalogo, ordini, pagamenti,
+  magazzino e orchestratore della saga.
+type: application
+
+# version  = versione del chart (cambia quando cambiano i template)
+# appVersion = versione dell'applicazione distribuita (i tag delle immagini)
+version: 0.1.0
+appVersion: "0.1.0"
+
+keywords:
+  - microservices
+  - kafka
+  - saga
+  - gateway-api
+
+maintainers:
+  - name: Polyglot Commerce

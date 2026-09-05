@@ -1,0 +1,41 @@
+{{/*
+Una ConfigMap per servizio, generata dai valori.
+
+Con Kustomize questi erano cinque file quasi identici da tenere
+allineati a mano; qui c'e' un solo template e la differenza fra i servizi
+sta tutta in values.yaml. E' il motivo principale per cui si passa a
+Helm: la ripetizione diventa un ciclo, non copie.
+*/}}
+{{- range $name, $svc := .Values.services }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}-config
+  namespace: {{ $.Values.namespace.name }}
+  labels:
+    {{- include "polyglot.labels" (dict "name" $name "release" $.Release.Name "chart" (printf "%s-%s" $.Chart.Name $.Chart.Version)) | nindent 4 }}
+data:
+  {{- with $svc.database }}
+  {{ .envPrefix }}_DB_HOST: {{ .host | quote }}
+  {{ .envPrefix }}_DB_PORT: {{ .port | quote }}
+  {{ .envPrefix }}_DB_NAME: {{ .name | quote }}
+  {{- end }}
+  {{- if $svc.features.kafka }}
+  KAFKA_BOOTSTRAP_SERVERS: {{ $.Values.kafka.bootstrapServers | quote }}
+  {{- end }}
+  {{- if $svc.features.keycloak }}
+  KEYCLOAK_ISSUER_URI: {{ $.Values.keycloak.issuerUri | quote }}
+  {{- end }}
+  {{- if $svc.features.minio }}
+  # Indirizzo con cui il *servizio* raggiunge l'object storage. Il browser
+  # non ci parla mai: le immagini le serve il catalogo su
+  # GET /api/products/{id}/image, quindi non c'e' il problema dei due URL
+  # diversi che affligge invece Keycloak.
+  MINIO_ENDPOINT: {{ $.Values.minio.endpoint | quote }}
+  MINIO_BUCKET: {{ $.Values.minio.bucket | quote }}
+  {{- end }}
+  {{- with $svc.extraEnv }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+{{- end }}

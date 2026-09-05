@@ -21,3 +21,10 @@ Thumbs.db
 
 # Log locali di test/avvio manuale
 *.log
+
+# Appunti personali di preparazione: restano solo in locale
+documentation/
+
+# Diario di lavoro e impostazioni locali: utili a chi lavora al progetto,
+# ma non parte del progetto stesso
+.claude/

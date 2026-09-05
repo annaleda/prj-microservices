@@ -1,0 +1,63 @@
+# Ambiente di produzione — NON ancora valorizzato.
+#
+# Questo file esiste per rendere esplicito *cosa manca* prima di poter
+# deployare davvero, invece di dare l'impressione che basti applicarlo.
+# I valori qui sotto sono segnaposto: vanno decisi quando esisteranno un
+# registry, un secret manager e un dominio reali.
+
+namespace:
+  # In produzione il namespace lo crea di norma la piattaforma, con le
+  # sue quote e le sue policy: un chart applicativo non dovrebbe avere il
+  # permesso di crearlo.
+  create: false
+  name: polyglot-commerce
+
+image:
+  # TODO: registry reale, es. registry.example.com/polyglot-commerce
+  repository: polyglot-commerce
+  # TODO: mai `latest`. Un tag immutabile (versione o digest) e' cio' che
+  # rende un rollback prevedibile.
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+defaults:
+  replicas: 3
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      # Nessun limite di CPU e' spesso preferibile (il throttling fa piu'
+      # danni dell'over-commit), mentre quello di memoria serve: superarlo
+      # significa OOMKill, non rallentamento.
+      memory: 1Gi
+
+gateway:
+  enabled: true
+  # TODO: in produzione il listener e' HTTPS con un certificato, non HTTP.
+  port: 80
+
+kafka:
+  # TODO: cluster gestito o operator, non un broker singolo.
+  bootstrapServers: kafka.messaging.svc.cluster.local:9092
+
+keycloak:
+  # TODO: dominio pubblico reale, lo stesso da cui il browser ottiene i
+  # token — vedi la nota in values-local.yaml.
+  issuerUri: https://auth.example.com/realms/polyglot-commerce
+
+minio:
+  # TODO: in produzione S3 o storage gestito. Le credenziali NON qui:
+  # External Secrets Operator / Vault, con questi campi lasciati vuoti e
+  # il Secret creato fuori dal chart.
+  endpoint: https://s3.example.com
+  bucket: product-images
+  accessKey: ""
+  secretKey: ""
+
+services:
+  # L'orchestratore resta a una replica finche' lo stato delle saghe e'
+  # in memoria. Portarlo a piu' repliche senza uno store persistente
+  # significa rompere le saghe in corso, non scalarle.
+  integration-service:
+    replicas: 1

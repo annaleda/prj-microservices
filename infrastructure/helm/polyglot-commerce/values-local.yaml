@@ -1,0 +1,53 @@
+# Ambiente locale: i servizi girano in un cluster kind, ma database,
+# Kafka, Keycloak e MinIO restano su docker-compose sull'host.
+#
+#   helm upgrade --install polyglot . -f values-local.yaml
+#
+# `host.docker.internal` e' il nome con cui un container raggiunge la
+# macchina che lo ospita.
+
+defaults:
+  # Una replica per servizio: in locale non serve ridondanza e si
+  # risparmiano risorse.
+  replicas: 1
+
+kafka:
+  # Porta 9094: e' il listener HOST del broker, quello annunciato ai
+  # client fuori dalla rete Docker. La 9092 e' interna ai container.
+  bootstrapServers: host.docker.internal:9094
+
+keycloak:
+  # ATTENZIONE, e' il punto piu' delicato del deploy locale.
+  #
+  # Questo URL non serve solo a raggiungere Keycloak: decide anche quale
+  # `iss` e' accettabile dentro il token. Il browser ottiene i token da
+  # http://localhost:8180 e quell'indirizzo finisce dentro il token; un
+  # servizio che si aspetta un issuer diverso li rifiuta tutti, pur
+  # essendo la firma valida.
+  #
+  # Perche' il login dal browser funzioni davvero dentro il cluster,
+  # Keycloak deve essere raggiungibile allo *stesso* URL da browser e da
+  # pod (si fissa con KC_HOSTNAME). host.docker.internal soddisfa solo la
+  # seconda meta': e' uno dei punti da verificare al primo deploy vero.
+  issuerUri: http://host.docker.internal:8180/realms/polyglot-commerce
+
+minio:
+  endpoint: http://host.docker.internal:9000
+
+services:
+  catalog-service:
+    database:
+      host: host.docker.internal
+      port: "5434"
+  order-service:
+    database:
+      host: host.docker.internal
+      port: "5435"
+  inventory-service:
+    database:
+      host: host.docker.internal
+      port: "5437"
+  payment-service:
+    database:
+      host: host.docker.internal
+      port: "5436"
