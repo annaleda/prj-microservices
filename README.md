@@ -464,7 +464,62 @@ Limite 5 MB, solo tipi `image/*`. La console di MinIO è su
 
 ---
 
-## 6. Deploy su Kubernetes con API Gateway
+## 6. Osservabilità
+
+Metriche, grafici e tracing distribuito. Dettagli e trappole in
+[infrastructure/monitoring/README.md](infrastructure/monitoring/README.md).
+
+```bash
+docker compose up -d prometheus grafana jaeger
+```
+
+| Strumento | Indirizzo | |
+|---|---|---|
+| Prometheus | `http://localhost:9090` | metriche |
+| Grafana | `http://localhost:3000` | `admin`/`admin`, datasource già pronte |
+| Jaeger | `http://localhost:16686` | trace distribuite |
+
+Le metriche funzionano senza fare altro: i servizi le espongono su
+`/actuator/prometheus` (Spring) e `/metrics` (FastAPI), e Prometheus le
+raccoglie ogni 15 secondi.
+
+Per le **trace** serve avviare i servizi con la strumentazione. Scarica
+una volta l'agent:
+
+```bash
+sh infrastructure/monitoring/download-otel-agent.sh
+```
+
+Poi i servizi Java — nessuna modifica al codice, l'agent li strumenta a
+runtime:
+
+```bash
+AG=infrastructure/monitoring/opentelemetry-javaagent.jar
+OTEL="-Dotel.exporter.otlp.endpoint=http://localhost:4318 -Dotel.metrics.exporter=none -Dotel.logs.exporter=none"
+
+java -javaagent:$AG -Dotel.service.name=order-service $OTEL      -jar services/order-service/target/order-service.jar
+```
+
+E quello Python:
+
+```bash
+cd services/inventory-service
+pip install -r requirements-otel.txt
+
+OTEL_SERVICE_NAME=inventory-service OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 OTEL_METRICS_EXPORTER=none OTEL_LOGS_EXPORTER=none opentelemetry-instrument python -m uvicorn app.main:app --port 8083
+```
+
+Creando un ordine, su Jaeger compare una trace che attraversa **tre
+servizi passando da Kafka**: `order-service` pubblica e, 31ms dopo,
+`inventory-service` e `integration-service` raccolgono lo stesso evento.
+
+> **Limite noto**: la saga non è una trace sola. Il tratto del pagamento
+> finisce in una trace separata, perché Camel apre un nuovo scambio per
+> ogni rotta. Per ricucire i segmenti resta il `correlationId`.
+
+---
+
+## 7. Deploy su Kubernetes con API Gateway
 
 Il deploy è descritto da un **chart Helm** in
 `infrastructure/helm/polyglot-commerce/` (prima era un impianto
@@ -484,7 +539,7 @@ identici ogni modifica trasversale andava ripetuta cinque volte — vedi
 
 `kubectl`, `kind`, `helm`.
 
-### 6.1 Creare un cluster dedicato
+### 7.1 Creare un cluster dedicato
 
 Usa un cluster **dedicato al progetto**, non uno già in uso per altro:
 
@@ -493,7 +548,7 @@ kind create cluster --name polyglot-commerce
 kubectl config use-context kind-polyglot-commerce
 ```
 
-### 6.2 Installare Envoy Gateway (il controller della Gateway API)
+### 7.2 Installare Envoy Gateway (il controller della Gateway API)
 
 Non fa parte del chart: è infrastruttura di cluster, non applicativa.
 
@@ -505,7 +560,7 @@ kubectl wait --timeout=5m -n envoy-gateway-system \
   deployment/envoy-gateway --for=condition=Available
 ```
 
-### 6.3 Costruire e caricare le immagini
+### 7.3 Costruire e caricare le immagini
 
 kind non accede alle immagini Docker locali: vanno caricate
 esplicitamente.
@@ -517,7 +572,7 @@ for svc in catalog-service order-service inventory-service payment-service integ
 done
 ```
 
-### 6.4 Installare il chart
+### 7.4 Installare il chart
 
 ```bash
 cd infrastructure/helm/polyglot-commerce
@@ -545,7 +600,7 @@ helm rollback polyglot <revisione>
 > diversa). Assicurati che `docker compose up -d` sia attivo **prima** di
 > installare il chart.
 
-### 6.5 Esporre il Gateway e testare il routing
+### 7.5 Esporre il Gateway e testare il routing
 
 Envoy Gateway crea un `Service` per il listener HTTP del `Gateway`. Su
 kind (senza LoadBalancer reale) si usa `port-forward`:
@@ -583,7 +638,7 @@ Se funziona, le richieste passano: client → Gateway (Envoy) →
 > il servizio se ne aspetta un altro, li rifiuta tutti pur essendo la
 > firma valida.
 
-### 6.6 Pulizia
+### 7.6 Pulizia
 
 ```bash
 kind delete cluster --name polyglot-commerce
@@ -601,7 +656,10 @@ infrastructure/
   kafka/            topic dell'event catalog, chi produce e chi consuma
   keycloak/         realm importabile, tema delle pagine di login
   minio/            object storage delle immagini
+  monitoring/       Prometheus, Grafana, agent OpenTelemetry
   demo/             script per i dati dimostrativi (seed-stock.sh)
+docs/adr/           12 decisioni architetturali, con il perché
+.github/workflows/  pipeline di CI (path filtering, test, build)
 docker-compose.yml  infrastruttura locale
 ```
 

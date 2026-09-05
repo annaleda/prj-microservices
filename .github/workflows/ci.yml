@@ -268,8 +268,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Il tag ha il prefisso `v`: `@0.24.0` non esiste e il job fallisce
+      # in "Set up job", cioe' prima di eseguire qualunque passo — sintomo
+      # tipico di un'action che non si riesce a risolvere.
       - name: Trivy
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
