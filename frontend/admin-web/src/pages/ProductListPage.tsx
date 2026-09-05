@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { deleteProduct, getProducts } from '../api/catalogApi';
 import { getInventory } from '../api/inventoryApi';
+import { PencilIcon, PlusIcon, TrashIcon } from '../components/icons';
 import { Product } from '../types/product';
 
 export default function ProductListPage() {
@@ -59,8 +60,13 @@ export default function ProductListPage() {
     <section>
       <div className="toolbar">
         <h1>Prodotti</h1>
-        <Link to="/products/new" className="button">
-          + Nuovo prodotto
+        <Link
+          to="/products/new"
+          className="icon-button icon-button--primary"
+          title="Nuovo prodotto"
+          aria-label="Nuovo prodotto"
+        >
+          <PlusIcon />
         </Link>
       </div>
 
@@ -102,8 +108,25 @@ export default function ProductListPage() {
                   )}
                 </td>
                 <td className="actions">
-                  <Link to={`/products/${p.id}/edit`}>Modifica</Link>
-                  <button onClick={() => handleDelete(p.id)}>Elimina</button>
+                  {/* Il testo non sparisce: e' nel `title`, che il browser
+                      mostra passandoci sopra, e nell'`aria-label` per chi
+                      l'icona non la vede. */}
+                  <Link
+                    to={`/products/${p.id}/edit`}
+                    className="icon-button"
+                    title={`Modifica ${p.name}`}
+                    aria-label={`Modifica ${p.name}`}
+                  >
+                    <PencilIcon />
+                  </Link>
+                  <button
+                    className="icon-button icon-button--danger"
+                    onClick={() => handleDelete(p.id)}
+                    title={`Elimina ${p.name}`}
+                    aria-label={`Elimina ${p.name}`}
+                  >
+                    <TrashIcon />
+                  </button>
                 </td>
               </tr>
             ))}

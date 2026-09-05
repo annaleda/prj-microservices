@@ -1,5 +1,5 @@
 .detail {
-  max-width: 760px;
+  max-width: 860px;
 
   &__back {
     display: inline-block;
@@ -15,7 +15,7 @@
 
   &__panel {
     display: grid;
-    grid-template-columns: 220px 1fr;
+    grid-template-columns: 320px 1fr;
     overflow: hidden;
 
     @media (max-width: 640px) {
@@ -23,20 +23,50 @@
     }
   }
 
-  &__photo {
-    display: block;
-    width: 100%;
-    height: 100%;
-    min-height: 240px;
-    object-fit: cover;
-    background: var(--surface-sunken);
-  }
-
-  &__thumb {
+  // La cornice dell'immagine, non l'immagine stessa.
+  //
+  // Prima la foto era direttamente la colonna della griglia: la sua
+  // altezza finiva per essere quella del testo accanto, quindi il
+  // rapporto della cornice cambiava con la lunghezza della descrizione, e
+  // `object-fit: cover` tagliava. Su una foto orizzontale in una colonna
+  // stretta questo significava perdere i due lati del prodotto.
+  &__media {
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 220px;
+    min-height: 300px;
+    padding: 1.5rem;
+    background: var(--surface-sunken);
+    border-right: 1px solid var(--border);
+
+    @media (max-width: 640px) {
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+    }
+  }
+
+  &__photo {
+    display: block;
+    // `contain` e non `cover`: sulla pagina di dettaglio si vuole vedere
+    // il prodotto intero, mentre nel catalogo conta che le tessere siano
+    // tutte uguali ed e' li' che `cover` ha senso.
+    //
+    // Nessun `width: 100%`: un'immagine piu' piccola della cornice resta
+    // alla sua dimensione invece di essere ingrandita e sgranata.
+    max-width: 100%;
+    max-height: 340px;
+    object-fit: contain;
+  }
+
+  &__thumb {
+    // Il segnaposto, al contrario, riempie la cornice: non e' una foto da
+    // rispettare ma una tinta.
+    align-self: stretch;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
     font-size: 4rem;
     font-weight: 700;
     color: rgba(255, 255, 255, 0.92);

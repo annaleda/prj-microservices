@@ -1,4 +1,11 @@
 .app-header {
+  /* Titolo a sinistra, utente e uscita all'estremita' opposta. Prima non
+     c'era nessun layout: i due blocchi scorrevano uno dopo l'altro, quindi
+     "admin Esci" finiva appiccicato al titolo. */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
   padding: 1rem 2rem;
   border-bottom: 1px solid #eee;
 }
@@ -7,6 +14,15 @@
   font-size: 1.25rem;
   font-weight: 700;
   color: #222;
+}
+
+.app-header__auth {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+  color: #555;
+  white-space: nowrap;
 }
 
 .app-main {
@@ -125,4 +141,53 @@
   border: 1px solid #ddd;
   border-radius: 6px;
   display: block;
+}
+
+/* Pulsanti a sola icona: il testo vive nel `title` (che il browser mostra
+   passandoci sopra) e nell'`aria-label`. */
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #f4f4f4;
+  color: #333;
+  cursor: pointer;
+}
+
+.icon-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.icon-button:hover {
+  background: #e9e9e9;
+}
+
+.icon-button--primary {
+  border-color: #4f46e5;
+  background: #4f46e5;
+  color: #fff;
+}
+
+.icon-button--primary:hover {
+  background: #4338ca;
+}
+
+/* Rosso e riconoscibile senza doverci passare sopra: il comando
+   distruttivo si deve vedere che e' distruttivo. */
+.icon-button--danger {
+  border-color: #e8a5a5;
+  background: #fde8e8;
+  color: #b3261e;
+}
+
+.icon-button--danger:hover {
+  border-color: #b3261e;
+  background: #b3261e;
+  color: #fff;
 }

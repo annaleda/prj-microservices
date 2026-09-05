@@ -100,7 +100,43 @@
     letter-spacing: -0.01em;
   }
 
-  button {
-    margin: 0.75rem 1.1rem 1.1rem;
+  // Il comando sta in fondo alla scheda, allineato a destra: da solo su
+  // una riga intera un'icona sembrerebbe persa.
+  &__footer {
+    display: flex;
+    justify-content: flex-end;
+    margin: 0.5rem 1.1rem 1.1rem;
+  }
+
+  // Icona al posto della scritta "Aggiungi al carrello". Il testo non
+  // sparisce: e' nel `title`, che il browser mostra passandoci sopra, e
+  // nell'`aria-label`, che nomina anche il prodotto — chi non vede
+  // l'icona deve sapere *quale* prodotto sta aggiungendo.
+  &__add {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    // In evidenza da subito, non solo al passaggio del mouse: è l'azione
+    // per cui la scheda esiste, e da spenta si confondeva con la scheda.
+    border: 1px solid var(--brand);
+    border-radius: var(--radius-sm);
+    background: var(--brand);
+    color: #fff;
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    transition: background 0.15s ease, border-color 0.15s ease;
+
+    svg {
+      width: 19px;
+      height: 19px;
+    }
+
+    &:hover {
+      background: var(--brand-strong);
+      border-color: var(--brand-strong);
+    }
   }
 }

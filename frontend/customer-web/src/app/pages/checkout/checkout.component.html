@@ -21,6 +21,7 @@
                       type="button"
                       class="checkout__quantity-button"
                       (click)="changeQuantity(item.productId, item.quantity - 1)"
+                      title="Diminuisci quantità"
                       aria-label="Diminuisci quantità"
                     >
                       −
@@ -32,6 +33,7 @@
                       type="button"
                       class="checkout__quantity-button"
                       (click)="changeQuantity(item.productId, item.quantity + 1)"
+                      title="Aumenta quantità"
                       aria-label="Aumenta quantità"
                     >
                       +
@@ -45,9 +47,18 @@
                 type="button"
                 class="checkout__remove"
                 (click)="removeItem(item.productId)"
-                [attr.aria-label]="'Rimuovi ' + item.productName"
+                [attr.title]="'Rimuovi ' + item.productName + ' dal carrello'"
+                [attr.aria-label]="'Rimuovi ' + item.productName + ' dal carrello'"
               >
-                Rimuovi
+                <!-- Icona disegnata a mano, come quelle dell'intestazione:
+                     poche icone non giustificano una libreria in piu'. -->
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M4 7h16" />
+                  <path d="M10 4h4a1 1 0 0 1 1 1v2H9V5a1 1 0 0 1 1-1z" />
+                  <path d="M6.5 7l.9 12.1A2 2 0 0 0 9.4 21h5.2a2 2 0 0 0 2-1.9L17.5 7" />
+                  <path d="M10 11v6M14 11v6" />
+                </svg>
               </button>
             </td>
           </tr>

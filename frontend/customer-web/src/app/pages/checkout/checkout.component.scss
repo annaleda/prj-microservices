@@ -145,16 +145,36 @@
     }
   }
 
+  // Cestino al posto della scritta "Rimuovi". La descrizione non sparisce:
+  // è nel `title`, che il browser mostra passandoci sopra, e nell'
+  // `aria-label` per chi l'icona non la vede.
   &__remove {
-    border: 0;
-    background: transparent;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+
+    // Rosso e riconoscibile senza doverci passare sopra: il comando
+    // distruttivo si deve vedere che è distruttivo.
+    border: 1px solid var(--danger);
+    border-radius: 6px;
+    background: var(--danger-soft);
     color: var(--danger);
     cursor: pointer;
-    font-size: 0.85rem;
-    padding: 0.4rem;
+    transition: background 0.15s ease, color 0.15s ease;
 
+    svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    // Al passaggio del mouse si riempie, così resta chiaro quale riga si
+    // sta per togliere quando ce ne sono diverse in colonna.
     &:hover {
-      text-decoration: underline;
+      background: var(--danger);
+      color: #fff;
     }
   }
 }

@@ -54,7 +54,7 @@ function App() {
           Polyglot Commerce &mdash; Admin
         </Link>
         <span className="app-header__auth">
-          {auth.user?.profile.preferred_username}{' '}
+          <span>{auth.user?.profile.preferred_username}</span>
           <button onClick={() => void auth.signoutRedirect()}>Esci</button>
         </span>
       </header>

@@ -105,6 +105,32 @@ describe('CheckoutComponent, esito annullato', () => {
     expect(text).toContain('Scorte non disponibili oppure pagamento rifiutato');
   });
 
+  it('il comando di rimozione resta descritto anche senza testo', () => {
+    // Sostituita la scritta "Rimuovi" con un cestino: un pulsante di sola
+    // icona senza nome accessibile e' muto per chi non la vede, e senza
+    // `title` non dice nulla nemmeno passandoci sopra col mouse.
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [CommonModule, RouterTestingModule],
+      declarations: [CheckoutComponent],
+      providers: [
+        CartService,
+        { provide: AuthService, useValue: authStub },
+        { provide: OrderService, useValue: { createOrder: () => of(null), awaitSagaOutcome: () => of(null) } },
+      ],
+    });
+    TestBed.inject(CartService).add(webcam);
+
+    const fixture = TestBed.createComponent(CheckoutComponent);
+    fixture.detectChanges();
+
+    const remove = (fixture.nativeElement as HTMLElement).querySelector('.checkout__remove');
+    expect(remove).toBeTruthy();
+    expect(remove!.querySelector('svg')).toBeTruthy();
+    expect(remove!.getAttribute('title')).toContain('Webcam 4K');
+    expect(remove!.getAttribute('aria-label')).toContain('Webcam 4K');
+  });
+
   it('lascia il carrello intatto, cosi' + "'" + ' si puo' + "'" + ' correggere e riprovare', () => {
     checkoutCancelledFor('PAYMENT_FAILED');
 

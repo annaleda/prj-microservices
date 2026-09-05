@@ -1244,6 +1244,48 @@ URL diversi, proprio perche' il browser non raggiunge mai MinIO.
 Keycloak e' la 3 -- riferimento gia' sbagliato prima, corretto ora che
 la rinumerazione del README lo rendeva ancora piu' fuorviante.
 
+### 25. L'immagine non si adattava al dettaglio prodotto
+
+Segnalazione dell'utente subito dopo aver caricato la sua prima foto.
+Guardata con uno screenshot invece che ragionandoci sopra (Chrome
+headless, come nelle sezioni 18/19/21): sul dettaglio del "Mouse
+wireless" il mouse risultava **tagliato ai due lati**.
+
+**Causa.** L'immagine *era* la colonna della griglia: larghezza fissa
+220px e altezza decisa da quanto testo c'era accanto. Il rapporto della
+cornice non lo stabiliva nessuno -- cambiava con la lunghezza della
+descrizione -- e `object-fit: cover` ci ritagliava dentro la foto. Con
+una cornice stretta e verticale e foto orizzontali (le dimostrative sono
+600x400) il risultato era perdere i lati del prodotto. La foto caricata
+dall'utente, **quadrata** (1254x1254), rendeva la cosa ancora piu'
+evidente.
+
+**Correzione.** L'immagine non e' piu' la cornice: c'e' un contenitore
+(`detail__media`) con sfondo neutro, e dentro la foto con
+`object-fit: contain`, senza `width: 100%`, cosi' un'immagine piu'
+piccola della cornice non viene ingrandita e sgranata. Colonna portata
+da 220 a 320px.
+
+La distinzione che conta, e che vale la pena ricordare: **`cover` nel
+catalogo, `contain` nel dettaglio**. Nella griglia serve che le tessere
+siano tutte uguali, e ritagliare e' il prezzo giusto; sulla pagina di un
+singolo prodotto si vuole vedere il prodotto intero, e a essere
+sacrificabile e' l'uniformita'. La lista e' rimasta com'era, e ha
+ragione a esserlo.
+
+Il segnaposto colorato (prodotto senza foto) si comporta al contrario:
+riempie la cornice, perche' non e' una foto da rispettare ma una tinta.
+
+Verificato con quattro screenshot -- foto orizzontale, foto quadrata,
+segnaposto, e viewport stretta (dove la griglia diventa a colonna
+singola). Nessun test automatico del progetto avrebbe visto niente di
+tutto questo.
+
+*Notato di passaggio, non corretto*: a 420px di larghezza l'intestazione
+(marchio + tre icone + due pulsanti) e' piu' larga dello schermo e fa
+scorrere la pagina in orizzontale. E' un difetto preesistente e
+indipendente da questa correzione.
+
 ### In sospeso: Admin Web
 
 Annotazione dell'utente (5 settembre 2026): **la parte admin e' messa
