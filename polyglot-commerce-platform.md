@@ -46,27 +46,45 @@ Kubernetes; - espone metriche, log e tracing.
                               Internet
                                  |
                                  v
-                        +------------------+
-                        | Kubernetes       |
-                        | API Gateway      |
-                        +--------+---------+
-                                 |
-              +------------------+------------------+
-              |                  |                  |
-              v                  v                  v
-        Customer Web         Admin Web          REST APIs
-          Angular              React
-                                 |
-    +-----------------------------------------------------------+
-    |                       Microservices                       |
-    |  Auth          Catalog         Order          Payment     |
-    |  Spring Boot   Spring Boot     Spring Boot    Spring Boot |
-    |                                + Kafka         + Kafka     |
-    |                                                           |
-    |  Inventory          Integration Service   Analytics       |
-    |  Python / FastAPI   Apache Camel           Python/FastAPI |
-    +-----------------------------------------------------------+
+                    +--------------------------+
+                    | Kubernetes API Gateway   |      +------------+
+                    | (Gateway API + Envoy)    |      |  Keycloak  |
+                    +------------+-------------+      |  OIDC      |
+                                 |                    +-----+------+
+              +------------------+---------------+          |
+              |                                  |          | token
+              v                                  v          |
+        Customer Web                        Admin Web <-----+
+          Angular 16                        React + Vite
+              |                                  |
+              +----------------+-----------------+
+                               v
+    +-------------------------------------------------------------+
+    |                       Microservices                         |
+    |                                                             |
+    |  Catalog        Order          Payment      Inventory       |
+    |  Spring Boot    Spring Boot    Spring Boot  Python/FastAPI  |
+    |     |              |              |             |           |
+    |     +--------------+--------------+-------------+           |
+    |                    |  eventi                                |
+    |                    v                                        |
+    |            +---------------+      +----------------------+  |
+    |            |  Apache Kafka |<---->| Integration Service  |  |
+    |            +---------------+      | Camel - saga         |  |
+    |                                   +----------------------+  |
+    |                                                             |
+    |  Auth (previsto)  Notification (previsto)  Analytics (prev.)|
+    +-------------------------------------------------------------+
+              |                                     |
+              v                                     v
+      un database per servizio                +-----------+
+      (5 Postgres + 1 MongoDB)                |   MinIO   |
+                                              | immagini  |
+                                              +-----------+
 ```
+
+I servizi di dominio **non si chiamano fra loro**: comunicano solo per
+eventi, ed e' l'Integration Service a coordinare la sequenza.
 
 ## 4. Technology Stack
 
@@ -163,8 +181,17 @@ GET /api/payments/{id}
 ```
 
 Consuma `payment.requested` (emesso durante l'orchestrazione della
-saga) ed esegue l'addebito verso il provider di pagamento configurato,
-pubblicando `payment.completed` o `payment.failed`.
+saga) ed esegue l'addebito, pubblicando `payment.completed` o
+`payment.failed`.
+
+*Stato*: non esiste alcun gateway di pagamento reale. L'esito e' deciso
+da una **regola simulata e dichiarata come tale nel codice** (una soglia
+sull'importo) invece di essere sempre positivo, cosi' resta provabile
+anche il percorso di fallimento e la relativa compensazione della saga.
+
+Il consumo e' **idempotente sull'ordine**: se un pagamento per
+quell'ordine esiste gia' non riaddebita, ma ripubblica l'esito --- chi
+lo attendeva potrebbe non aver visto il primo.
 
 ### Inventory Service
 
@@ -223,41 +250,81 @@ necessarie in caso di fallimento.
 Consuma eventi relativi a ordini, pagamenti e spedizioni e genera
 notifiche.
 
+*Stato*: non implementato. E' la ragione per cui i topic
+`notification.requested` e `order.shipped` esistono ma restano senza
+consumer e senza traffico. E' anche il servizio mancante piu' piccolo, e
+quello che chiuderebbe l'event catalog.
+
 ### Analytics Service
 
 **Stack:** Python, FastAPI, Kafka, MongoDB.
 
 Raccoglie e aggrega eventi per dashboard e statistiche.
 
+*Stato*: non implementato. Di conseguenza **`analytics-db` (MongoDB) e'
+avviato ma mai usato**, ed e' l'unico pezzo di infrastruttura del
+progetto che non serve ancora a nulla; anche il topic
+`inventory.updated` resta senza consumer.
+
 ## 6. Database per Service
 
 Ogni servizio è proprietario dei propri dati.
 
 ``` text
-Auth Service       -> auth-db
-Catalog Service    -> catalog-db
-Order Service      -> orders-db
-Payment Service    -> payments-db
-Inventory Service  -> inventory-db
-Analytics Service  -> analytics-db
+Catalog Service    -> catalog-db      (PostgreSQL)
+Order Service      -> orders-db       (PostgreSQL)
+Payment Service    -> payments-db     (PostgreSQL)
+Inventory Service  -> inventory-db    (PostgreSQL)
+Keycloak           -> auth-db         (PostgreSQL)
+Analytics Service  -> analytics-db    (MongoDB)   *non ancora usato*
 ```
 
+Sono **container Postgres distinti**, non schemi diversi della stessa
+istanza: la separazione e' voluta e resa visibile.
+
+`auth-db` era previsto per l'Auth Service; poiche' quel servizio non
+esiste, oggi lo usa **Keycloak** come proprio database.
+`analytics-db` e' avviato ma **mai usato**, perche' l'Analytics Service
+non e' implementato.
+
+L'Integration Service **non ha database**: lo stato delle saghe in corso
+e' in memoria. E' un limite dichiarato, ed e' il motivo per cui gira a
+una sola replica.
+
 Un servizio non deve accedere direttamente alle tabelle di un altro
-servizio.
+servizio. Conseguenza pratica accettata: **denormalizzazione voluta** ---
+una riga d'ordine conserva nome, prezzo e immagine del prodotto al
+momento dell'acquisto, perche' un ordine e' una ricevuta e deve restare
+leggibile anche se il prodotto viene tolto dal catalogo.
 
 ## 7. API Gateway
 
 Routing previsto:
 
+Rotte attive (un `HTTPRoute` per servizio nel chart Helm):
+
 ``` text
-/api/auth/**       -> auth-service
 /api/products/**   -> catalog-service
 /api/categories/** -> catalog-service
 /api/orders/**     -> order-service
 /api/payments/**   -> payment-service
 /api/inventory/**  -> inventory-service
+```
+
+Previste, per servizi non ancora implementati:
+
+``` text
+/api/auth/**       -> auth-service
 /api/analytics/**  -> analytics-service
 ```
+
+L'**Integration Service non ha rotte**: parla solo per eventi e non
+espone API pubbliche. Le immagini dei prodotti sono servite dal Catalog
+Service su `/api/products/{id}/image` e ricadono quindi nella sua rotta.
+
+Lo stesso schema di instradamento per prefisso e' replicato nei proxy dei
+dev server dei due frontend, cosi' le chiamate usano sempre percorsi
+relativi e non servono configurazioni per ambiente.
 
 Il gateway gestirà progressivamente TLS, CORS, rate limiting,
 autenticazione, traffic splitting e API versioning.
@@ -433,19 +500,47 @@ configurazione, non una cartella di manifest.
 
 Tre pilastri: - Logs - Metrics - Traces
 
-Stack: - Prometheus - Grafana - Loki - Tempo - OpenTelemetry
+Stack previsto: - Prometheus - Grafana - Loki - Tempo - OpenTelemetry
 
 Ogni richiesta dovrà essere correlabile tramite `traceId`, `spanId` e
 `correlationId`.
 
+*Stato*: **nulla di tutto questo e' realizzato** (Phase 5 della roadmap).
+Le metriche non sono nemmeno esposte: manca
+`micrometer-registry-prometheus`, quindi Actuator pubblica solo
+`/actuator/health` e `/actuator/info`.
+
+L'unico pezzo esistente e' il **`correlationId`**, generato all'apertura
+di ogni saga e propagato invariato da tutti gli eventi successivi: e'
+tracing distribuito fatto a mano, sufficiente a ricostruire un flusso
+leggendo i log dei quattro servizi, ma senza visualizzazione ne'
+misurazione dei tempi.
+
+Nota su dove il tracing automatico va verificato: il consumer Kafka
+dell'Inventory Service gira su un **thread dedicato**, e il contesto di
+tracing e' legato al thread. E' esattamente il punto in cui la
+propagazione automatica puo' interrompersi.
+
 ## 12. Resilience
 
-Pattern previsti: - Timeout - Retry - Circuit Breaker - Bulkhead - Dead
-Letter Queue - Idempotent Consumer - Saga Pattern
+| Pattern | Stato |
+|---|---|
+| Retry | **fatto** --- 3 tentativi a un secondo sui consumer Kafka |
+| Dead Letter Queue | **fatto** --- topic `saga.dlq` |
+| Idempotent Consumer | **fatto** --- in Inventory, Payment e Order |
+| Saga Pattern | **fatto** --- orchestrata, vedi [Saga Orchestration](#saga-orchestration) |
+| Timeout | parziale --- solo lato frontend, sull'attesa dell'esito della saga |
+| Circuit Breaker | **non fatto**, e oggi non avrebbe dove stare: nessun servizio chiama un altro via HTTP |
+| Bulkhead | non fatto |
 
 Il Saga Pattern è implementato in modalità **orchestrata**
-dall'Integration Service (Apache Camel) — vedi [Saga
-Orchestration](#saga-orchestration).
+dall'Integration Service (Apache Camel).
+
+Sul Circuit Breaker vale la pena essere espliciti: e' un pattern per le
+chiamate **sincrone** verso qualcosa che puo' degradare. In
+un'architettura interamente a eventi non c'e' una chiamata da
+interrompere --- il messaggio resta nel broker. Servira' al primo sistema
+esterno sincrono: un gateway di pagamento vero, un corriere.
 
 ## 13. Testing Strategy
 
@@ -453,13 +548,24 @@ Java: - JUnit - Mockito - Testcontainers
 
 Python: - pytest - Testcontainers
 
-Frontend: - Angular Testing - React Testing Library - Playwright
+Frontend: - Angular Testing (20 test su Customer Web) - React Testing
+Library e Playwright: **non usati**, Admin Web non ha alcun test ed e'
+l'unica parte del progetto senza
 
 API: - OpenAPI 3 - Swagger UI
 
 Contract Testing: - Pact, per verificare la compatibilità dei contratti
 tra i servizi produttori/consumatori di API ed eventi (in particolare
-tra Order/Payment/Inventory nel flusso di saga).
+tra Order/Payment/Inventory nel flusso di saga). **Non implementato.**
+
+*Stato*: i test di integrazione usano **Testcontainers con Postgres,
+Kafka e MinIO reali**, non mock. L'unica cosa deliberatamente finta e' la
+firma dei token: le regole di autorizzazione testate sono quelle vere,
+mentre verificare che Keycloak sappia firmare un JWT non e' compito di
+questi test.
+
+Conteggio: Catalog 10, Order 20, Payment 9, Integration 5, Inventory 18,
+Customer Web 20.
 
 ## 14. CI/CD
 
@@ -489,44 +595,58 @@ Kubernetes
 Le pipeline useranno path filtering per compilare solamente i componenti
 modificati.
 
+*Stato*: **non implementato**, `.github/workflows/` non esiste. Oggi
+test e build si lanciano a mano (vedi la sezione "Test" del README).
+
 ## 15. Repository Structure
+
+Stato attuale del repository. Le voci marcate *(previsto)* fanno parte
+del progetto ma non esistono ancora.
 
 ``` text
 polyglot-commerce-platform/
 ├── README.md
-├── docs/
-│   ├── architecture/
-│   ├── api/
-│   ├── events/
-│   └── adr/
-├── frontend/
-│   ├── customer-web/
-│   └── admin-web/
-├── services/
-│   ├── auth-service/
-│   ├── catalog-service/
-│   ├── order-service/
-│   ├── payment-service/
-│   ├── inventory-service/
-│   ├── analytics-service/
-│   ├── integration-service/
-│   └── notification-service/
-├── infrastructure/
-│   ├── kubernetes/
-│   ├── kafka/
-│   ├── gateway/
-│   ├── monitoring/
-│   └── keycloak/
-├── helm/
-├── scripts/
 ├── docker-compose.yml
-└── .github/
-    └── workflows/
+├── polyglot-commerce-platform.md      questo documento
+├── frontend/
+│   ├── customer-web/                  Angular 16
+│   └── admin-web/                     React + Vite 4
+├── services/
+│   ├── catalog-service/               Spring Boot
+│   ├── order-service/                 Spring Boot + Kafka
+│   ├── payment-service/               Spring Boot + Kafka
+│   ├── inventory-service/             Python + FastAPI
+│   ├── integration-service/           Spring Boot + Camel (saga)
+│   ├── auth-service/                  (previsto)
+│   ├── notification-service/          (previsto)
+│   └── analytics-service/             (previsto)
+├── infrastructure/
+│   ├── helm/polyglot-commerce/        chart di deploy (vedi sezione 10)
+│   ├── kafka/                         topic, chi produce e chi consuma
+│   ├── keycloak/                      realm importabile, tema di login
+│   ├── minio/                         object storage delle immagini
+│   ├── demo/                          script per i dati dimostrativi
+│   └── monitoring/                    (previsto, Phase 5)
+├── docs/adr/                          (previsto, vedi sezione 16)
+└── .github/workflows/                 (previsto, vedi sezione 14)
 ```
+
+Rispetto alla struttura immaginata all'inizio, due differenze
+consapevoli:
+
+- **il chart Helm sta sotto `infrastructure/`** e non alla radice: e'
+  infrastruttura come Kafka e Keycloak, non un componente a se';
+- **non c'e' una cartella `gateway/` separata**: `GatewayClass`,
+  `Gateway` e gli `HTTPRoute` sono template del chart, perche' vivono e
+  muoiono con il deploy dei servizi.
 
 ## 16. Architecture Decision Records
 
 Gli ADR saranno salvati in `docs/adr/`.
+
+*Stato*: **nessun ADR scritto**, la cartella non esiste. Le decisioni
+elencate qui sotto sono state prese davvero e sono motivate nel diario di
+lavoro, ma non sono ancora in forma di ADR.
 
 Esempi:
 
@@ -543,49 +663,61 @@ Esempi:
 
 ## 17. Roadmap
 
+Stato aggiornato: `[x]` fatto e verificato, `[ ]` da fare. Dove la
+realizzazione si discosta dal piano c'e' una nota.
+
 ### Phase 1 --- Foundation
 
--   [ ] Creazione monorepo
--   [ ] Angular customer application
--   [ ] Catalog Service Spring Boot
--   [ ] PostgreSQL
--   [ ] Docker / Docker Compose
--   [ ] API Gateway
--   [ ] Kubernetes base
--   [ ] OpenAPI
+-   [x] Creazione monorepo
+-   [x] Angular customer application
+-   [x] Catalog Service Spring Boot
+-   [x] PostgreSQL
+-   [x] Docker / Docker Compose
+-   [x] API Gateway (Gateway API + Envoy; manifest scritti e validati,
+    mai applicati a un cluster)
+-   [x] Kubernetes base (chart Helm, vedi sezione 10)
+-   [x] OpenAPI (Swagger UI su tutti i servizi, con schema di sicurezza
+    bearer)
 
 ### Phase 2 --- Orders & Inventory
 
--   [ ] Order Service Spring Boot
--   [ ] Payment Service Spring Boot
--   [ ] Inventory Service Python/FastAPI
--   [ ] Database separati
--   [ ] Integration tests
--   [ ] Testcontainers
+-   [x] Order Service Spring Boot
+-   [x] Payment Service Spring Boot
+-   [x] Inventory Service Python/FastAPI
+-   [x] Database separati
+-   [x] Integration tests
+-   [x] Testcontainers (Postgres, Kafka e MinIO reali)
 
 ### Phase 3 --- Event-Driven Architecture
 
--   [ ] Kafka
--   [ ] Event envelope
--   [ ] Apache Camel Integration Service
--   [ ] Saga orchestration via Apache Camel (Order → Inventory →
+-   [x] Kafka (KRaft, senza Zookeeper)
+-   [x] Event envelope
+-   [x] Apache Camel Integration Service
+-   [x] Saga orchestration via Apache Camel (Order -> Inventory ->
     Payment)
--   [ ] Compensating transactions
--   [ ] Retry
--   [ ] DLQ
--   [ ] Idempotent consumers
+-   [x] Compensating transactions
+-   [x] Retry
+-   [x] DLQ (`saga.dlq`)
+-   [x] Idempotent consumers
 
 ### Phase 4 --- Security & Administration
 
--   [ ] React Admin
--   [ ] Keycloak
--   [ ] OAuth2/OIDC
--   [ ] JWT
--   [ ] Authorization
+-   [x] React Admin
+-   [x] Keycloak (realm importato da JSON, tema per login e
+    registrazione)
+-   [x] OAuth2/OIDC (authorization code + PKCE)
+-   [x] JWT (verifica con chiavi pubbliche, nessun segreto condiviso)
+-   [x] Authorization (ruoli CUSTOMER / ADMIN / WAREHOUSE / SUPPORT)
 
 ### Phase 5 --- Observability
 
--   [ ] Prometheus
+**Nessun punto realizzato.** E' l'unica fase interamente da fare, ed e'
+anche quella che manca di piu': una saga attraversa quattro servizi e
+cinque topic, e oggi per seguirla si leggono i log di quattro processi
+correlandoli a mano con il `correlationId`.
+
+-   [ ] Prometheus (le metriche non sono nemmeno esposte: manca
+    `micrometer-registry-prometheus`)
 -   [ ] Grafana
 -   [ ] Loki
 -   [ ] Tempo
@@ -594,23 +726,62 @@ Esempi:
 
 ### Phase 6 --- Advanced Architecture
 
--   [ ] Saga Pattern
--   [ ] Circuit Breaker
--   [ ] Contract Testing
+-   [x] Saga Pattern (realizzato in Phase 3)
+-   [ ] Circuit Breaker --- **da riconsiderare**: nessun servizio chiama
+    un altro via HTTP, comunicano solo per eventi, quindi oggi non
+    avrebbe dove stare. Servira' con il primo sistema esterno sincrono
+    (un gateway di pagamento vero, un corriere).
+-   [ ] Contract Testing (Pact)
 -   [ ] Horizontal Pod Autoscaling
--   [ ] Kubernetes probes
+-   [x] Kubernetes probes (readiness e liveness su tutti i servizi)
 -   [ ] Network Policies
 -   [ ] Chaos testing
 -   [ ] Performance testing
 
+### Fuori roadmap, realizzato comunque
+
+-   [x] **Object storage** (MinIO) per le immagini dei prodotti, con
+    caricamento da Admin Web
+-   [x] **Riordino** e dettaglio degli ordini passati in Customer Web
+-   [x] **Console ordini** in Admin Web: unico punto in cui si vedono gli
+    ordini non riusciti, con cliente, articoli e motivo, per capire cosa
+    rifornire
+
+### Non implementato dei servizi previsti
+
+-   **Auth Service** --- rimandato di proposito: identita' e ruoli li
+    gestisce Keycloak. Avra' senso con i dati di profilo applicativi
+    (indirizzi, preferenze, consensi).
+-   **Notification Service** --- da cui i topic `notification.requested`
+    e `order.shipped` restano senza consumer.
+-   **Analytics Service** --- da cui `analytics-db` (MongoDB) e' avviato
+    ma **mai usato**, e il topic `inventory.updated` resta senza
+    consumer.
+
 ## 18. Definition of Done
 
-Un microservizio è completo quando dispone di: - \[ \] API/consumer
-definiti - \[ \] Unit test - \[ \] Integration test - \[ \] OpenAPI per
-REST - \[ \] Dockerfile - \[ \] Health/readiness checks - \[ \]
-Metrics - \[ \] Structured logging - \[ \] Tracing - \[ \] Kubernetes
-Deployment e Service - \[ \] ConfigMap/Secret - \[ \] CI pipeline - \[
-\] Error handling - \[ \] README
+Un microservizio è completo quando dispone di:
+
+| Voce | Stato sui cinque servizi realizzati |
+|---|---|
+| API/consumer definiti | fatto |
+| Unit test | parziale --- la copertura e' su test di integrazione, non unitari |
+| Integration test | fatto (Testcontainers) |
+| OpenAPI per REST | fatto, con schema di sicurezza bearer |
+| Dockerfile | fatto |
+| Health/readiness checks | fatto |
+| ConfigMap/Secret | fatto (chart Helm) |
+| Kubernetes Deployment e Service | fatto (scritti e validati, mai applicati) |
+| Error handling | fatto |
+| **Metrics** | **mancante** su tutti |
+| **Structured logging** | **mancante**: log testuali, non JSON |
+| **Tracing** | **mancante** |
+| **CI pipeline** | **mancante** |
+| **README per servizio** | **mancante**: la documentazione e' centralizzata nel README di radice |
+
+**Nessun servizio soddisfa oggi la Definition of Done per intero**: i
+quattro punti mancanti sono gli stessi per tutti e cinque, e coincidono
+con Phase 5 (observability) e sezione 14 (CI/CD).
 
 ## 19. Engineering Principles
 
