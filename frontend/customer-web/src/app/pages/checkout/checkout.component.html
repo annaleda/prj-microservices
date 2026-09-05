@@ -15,9 +15,41 @@
         <tbody>
           <tr *ngFor="let item of items$ | async">
             <td>{{ item.productName }}</td>
-            <td>{{ item.quantity }}</td>
+                <td>
+                  <div class="checkout__quantity">
+                    <button
+                      type="button"
+                      class="checkout__quantity-button"
+                      (click)="changeQuantity(item.productId, item.quantity - 1)"
+                      aria-label="Diminuisci quantità"
+                    >
+                      −
+                    </button>
+
+                    <span>{{ item.quantity }}</span>
+
+                    <button
+                      type="button"
+                      class="checkout__quantity-button"
+                      (click)="changeQuantity(item.productId, item.quantity + 1)"
+                      aria-label="Aumenta quantità"
+                    >
+                      +
+                    </button>
+                  </div>
+                </td>
             <td>{{ item.unitPrice | currency: 'EUR' }}</td>
             <td>{{ item.quantity * item.unitPrice | currency: 'EUR' }}</td>
+            <td>
+              <button
+                type="button"
+                class="checkout__remove"
+                (click)="removeItem(item.productId)"
+                [attr.aria-label]="'Rimuovi ' + item.productName"
+              >
+                Rimuovi
+              </button>
+            </td>
           </tr>
         </tbody>
       </table>

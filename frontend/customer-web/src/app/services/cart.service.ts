@@ -44,6 +44,21 @@ export class CartService {
     this.update(this.itemsSubject.value.filter((item) => item.productId !== productId));
   }
 
+  updateQuantity(productId: number, quantity: number): void {
+  if (quantity <= 0) {
+    this.remove(productId);
+    return;
+  }
+
+  const items = this.itemsSubject.value.map((item) =>
+    item.productId === productId
+      ? { ...item, quantity }
+      : { ...item }
+  );
+
+  this.update(items);
+}
+
   clear(): void {
     this.update([]);
   }

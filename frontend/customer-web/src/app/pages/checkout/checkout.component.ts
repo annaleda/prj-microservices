@@ -75,4 +75,12 @@ export class CheckoutComponent {
       },
     });
   }
+
+  changeQuantity(productId: number, quantity: number): void {
+    this.cartService.updateQuantity(productId, quantity);
+  }
+
+  removeItem(productId: number): void {
+    this.cartService.remove(productId);
+  }
 }

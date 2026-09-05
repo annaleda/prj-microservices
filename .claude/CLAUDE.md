@@ -991,3 +991,17 @@ Verifica: catalog-service 5/5 (test esteso all'immagine), build di
 entrambi i frontend, e screenshot del catalogo per controllare che le
 foto si vedano davvero e riempiano la scheda senza deformarsi
 (`object-fit: cover`).
+
+### In sospeso: Admin Web
+
+Annotazione dell'utente (5 settembre 2026): **la parte admin e' messa
+male**, da rivedere in una sessione successiva.
+
+Contesto per quando si riprendera': Admin Web (`frontend/admin-web/`,
+React + Vite) e' l'unica parte rimasta indietro rispetto al resto. Ha
+ricevuto solo il minimo indispensabile - login OIDC e blocco per chi non
+ha il ruolo ADMIN - mentre il sistema di stili, la tipografia Inter, le
+schede e i riquadri di stato introdotti in Customer Web (sezione 19) non
+sono mai stati portati qui: usa ancora il CSS generato dal template di
+Vite. Da chiarire con l'utente se il problema sia l'aspetto, la
+struttura delle pagine (oggi solo elenco prodotti e form) o entrambi.
