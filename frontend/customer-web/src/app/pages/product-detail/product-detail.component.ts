@@ -34,6 +34,17 @@ export class ProductDetailComponent implements OnInit {
     );
   }
 
+  /** Diventa true se l'immagine non si carica: si ripiega sul colore. */
+  private imageBroken = false;
+
+  showPhoto(product: Product): boolean {
+    return !!product.imageUrl && !this.imageBroken;
+  }
+
+  onImageError(): void {
+    this.imageBroken = true;
+  }
+
   /** Stessa banda colorata della lista, cosi' il prodotto si riconosce. */
   thumbnail(product: Product): string {
     const hue = [...product.name].reduce((acc, char) => acc + char.charCodeAt(0), 0) % 360;

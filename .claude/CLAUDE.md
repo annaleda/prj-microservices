@@ -851,3 +851,143 @@ solo "compila"): sul catalogo l'icona a griglia risulta attiva e quella
 del carrello no, sul checkout si invertono - e le icone si vedono e
 sono allineate, cosa che nessun test automatico del progetto avrebbe
 colto.
+
+### 19. Grafica dell'applicazione, tema di Keycloak e registrazione
+
+Richiesta dell'utente: una grafica piu' curata, una grafica per il login
+"sopra a Keycloak" e una pagina di registrazione con lo stesso aspetto.
+
+**Applicazione**: introdotto un piccolo sistema di stili in
+`styles.scss` (colori, spaziature, raggi, ombre, tipografia Inter) su
+cui i componenti si appoggiano, invece di valori ripetuti file per file.
+Header con monogramma, schede prodotto con una banda colorata derivata
+dal nome (il catalogo non ha immagini: meglio una tinta stabile e
+riconoscibile che un finto segnaposto), stati della saga come riquadri
+colorati, tabella dello storico ripulita.
+
+**Decisione tecnica importante sul login.** "Sopra a Keycloak" si poteva
+leggere in due modi: un modulo di login dentro l'applicazione Angular
+che manda username e password a Keycloak (Direct Access Grant), oppure
+un **tema di Keycloak** con la nostra grafica. Scelto il tema, perche'
+il primo modo e' un anti-pattern: l'applicazione vedrebbe le password
+in chiaro, si perderebbero SSO, MFA, recupero password e protezione
+dai tentativi ripetuti, e il grant in questione e' sconsigliato in
+OAuth 2.1. Con il tema si ottiene la stessa cosa che l'utente voleva -
+pagine di accesso e registrazione con la grafica del negozio - senza
+che le credenziali passino mai dall'applicazione.
+
+Il tema (`infrastructure/keycloak/themes/polyglot/`) **eredita da
+`keycloak` e sovrascrive solo il CSS**: i template FreeMarker restano
+gli originali, cosi' un aggiornamento di Keycloak non obbliga a
+riallineare pagine che non abbiamo scritto. Attenzione a una
+particolarita': `styles` nel `theme.properties` *sostituisce* il valore
+del genitore invece di aggiungersi, quindi `css/login.css` va ripetuto.
+
+**Registrazione**: abilitata nel realm (`registrationAllowed`), quindi
+e' Keycloak stesso a fornire la pagina - gia' con validazione, password
+di conferma, controllo dei duplicati - nel nostro tema. Dall'header
+dell'app il pulsante "Registrati" porta all'endpoint
+`/protocol/openid-connect/registrations`, che e' lo stesso flusso del
+login (authorization code + PKCE) su un percorso diverso: chi si
+registra torna nell'app gia' collegato.
+
+**Dettaglio che avrebbe reso inutile la registrazione**: un nuovo
+iscritto non aveva alcun ruolo, quindi avrebbe preso 403 al primo
+ordine. Aggiunto CUSTOMER ai ruoli di default del realm.
+
+Aggiunta anche la lingua italiana (`defaultLocale`), con il solo
+italiano fra le lingue supportate: dichiarando anche l'inglese vinceva
+quello, perche' Keycloak segue la lingua del browser.
+
+**Note di percorso**: la rimozione del volume di `auth-db` per
+rileggere il realm da zero e' stata bloccata (azione distruttiva), e
+l'import ignora i realm gia' esistenti; il realm in esecuzione e' stato
+quindi allineato via API di amministrazione, restando il JSON la fonte
+di verita' per gli ambienti creati da zero. Docker Desktop e' inoltre
+andato in timeout al primo tentativo di condividere la cartella del
+tema, riuscito al secondo.
+
+**Verifica**: quattro giri di screenshot con Chrome headless, non
+"compila". Hanno fatto emergere cose che nessun test del progetto
+avrebbe visto: la pagina in inglese, una fascia grigia ereditata dal
+tema PatternFly (`#kc-info-wrapper`, un contenitore intermedio che i
+primi selettori saltavano), due righe di separazione invece di una, e
+il titolo della registrazione spostato perche' sta in una colonna
+Bootstrap larga 10/12.
+
+### 20. Ordini di qualcun altro nello storico (vulnerabilita' reale)
+
+Segnalazione dell'utente: "mi sono registrata e ho due ordini che non ho
+mai fatto".
+
+Verificato subito sui dati: l'utente si era registrata con la propria
+email, e nel database c'erano **esattamente due ordini con quello stesso
+indirizzo**, creati il 28 agosto e il 5 settembre - cioe' quando il
+checkout aveva ancora il campo email libero, prima dell'autenticazione.
+
+La causa non era il dato vecchio ma il criterio: **la proprieta' di un
+ordine era decisa dall'email**. L'email non e' una prova di identita' -
+si puo' cambiare, e in fase di registrazione chiunque puo' dichiarare
+quella di un altro, tanto piu' qui dove Keycloak non la verifica.
+Bastava quindi registrarsi con l'indirizzo di una persona per vederne
+gli ordini.
+
+**Correzione**: la proprieta' si basa sul claim `sub` del token,
+l'identificativo stabile assegnato dall'identity provider. Aggiunta la
+colonna `orders.customer_id`; `customerEmail` resta, ma solo per
+mostrarla e per le future notifiche, non per autorizzare. Gli ordini
+creati prima dell'autenticazione hanno `customer_id` nullo: non sono
+attribuibili a nessun account e restano visibili al solo personale
+interno.
+
+Test di regressione che inchioda il comportamento: due account con la
+**stessa email** e identita' diverse non si vedono gli ordini a vicenda
+(lista filtrata e 403 sull'accesso diretto). Order Service 13/13.
+
+Verificato dal vivo: i 14 ordini preesistenti sono scomparsi dallo
+storico dei clienti (`customer` passa da 6 a 0) restando visibili
+all'admin (14), e un ordine nuovo creato con il token viene legato
+all'identita' e ricompare correttamente.
+
+Lezione, gemella di quella della sezione 16: una scelta ragionevole
+quando e' stata presa - intestare l'ordine all'email digitata - diventa
+una falla nel momento in cui accanto nasce un sistema di identita'.
+
+### 21. Foto dei prodotti
+
+Richiesta dell'utente: immagini realistiche al posto della banda
+colorata. La banda non era una scelta estetica ma una conseguenza: il
+modello `Product` non aveva un campo immagine, quindi non c'era nulla da
+mostrare.
+
+Aggiunto `products.image_url` (catalog-service), passato per DTO,
+servizio e form di Admin Web ("URL immagine"). **Si memorizza solo
+l'indirizzo, non il file**: gestire i binari (upload, ridimensionamento,
+CDN) e' un problema a se', da affrontare quando servira' davvero.
+
+Nel frontend l'immagine ha un **doppio ripiego**: se il prodotto non ha
+un indirizzo, oppure se l'immagine non si carica (`(error)` sul tag
+img), ricompare la banda colorata di prima. Un URL esterno puo' sempre
+rompersi, e un riquadro rotto e' peggio di un segnaposto.
+
+Aggiunti 9 prodotti dimostrativi in `data.sql` (inserimenti idempotenti
+per SKU, come gia' le categorie), distribuiti sulle tre categorie: prima
+il catalogo aveva due sole voci, di cui una era un prodotto di test
+creato da me per verificare il ruolo ADMIN — eliminato.
+
+**Le foto vengono da loremflickr**, un servizio pubblico che restituisce
+fotografie reali per parola chiave. Ha un limite di cui vale la pena
+avere memoria: la corrispondenza e' approssimativa. "keyboard" pescava
+pianoforti, "mouse,computer" ancora pianoforti, "backpack,bag" scene di
+strada. Le foto sono state **scaricate e guardate** una per una fino a
+trovare tag affidabili: i tag singoli e specifici (`mechanicalkeyboard`,
+`computermouse`, `backpack`) funzionano meglio delle combinazioni.
+Restano imperfezioni — il servizio sceglie a caso dentro il gruppo di
+foto con quel tag, quindi l'immagine cambia a ogni caricamento. In un
+negozio vero si mettono le proprie foto, ed e' esattamente cio' che il
+campo consente.
+
+Verifica: catalog-service 5/5 (test esteso all'immagine), build di
+entrambi i frontend, e screenshot del catalogo per controllare che le
+foto si vedano davvero e riempiano la scheda senza deformarsi
+(`object-fit: cover`).

@@ -9,6 +9,7 @@ const emptyForm: ProductInput = {
   description: '',
   price: 0,
   sku: '',
+  imageUrl: '',
   categoryId: 0,
 };
 
@@ -39,6 +40,7 @@ export default function ProductFormPage() {
           description: product.description ?? '',
           price: product.price,
           sku: product.sku,
+          imageUrl: product.imageUrl ?? '',
           categoryId: product.categoryId ?? 0,
         })
       )
@@ -86,6 +88,16 @@ export default function ProductFormPage() {
         <label>
           SKU
           <input required value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} />
+        </label>
+
+        <label>
+          URL immagine
+          <input
+            type="url"
+            placeholder="https://…"
+            value={form.imageUrl}
+            onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
+          />
         </label>
 
         <label>

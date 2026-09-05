@@ -326,6 +326,12 @@ Un ordine e' intestato a chi presenta il token: l'email non viaggia piu'
 nella richiesta, e un cliente che chiede l'ordine di un altro riceve 403
 (non 404: l'ordine esiste, semplicemente non e' suo).
 
+L'identita' e' il claim `sub` del token, non l'email. L'email e' un
+attributo modificabile e dichiarabile da chiunque in fase di
+registrazione: legarci la proprieta' dei dati significherebbe che
+registrarsi con l'indirizzo di un'altra persona basta per vederne gli
+ordini. L'email resta memorizzata per mostrarla e per le notifiche.
+
 Nota sul confine: questi controlli valgono sulle API HTTP. I passi della
 saga viaggiano su Kafka e non attraversano i filtri di sicurezza HTTP;
 il broker e' considerato rete interna. Proteggerlo (SASL/mTLS) e' un

@@ -7,6 +7,7 @@ const mouse: Product = {
   description: 'Ergonomic mouse',
   price: 29.9,
   sku: 'SKU-001',
+  imageUrl: null,
   categoryId: 1,
   categoryName: 'Electronics',
   createdAt: '2026-09-05T00:00:00Z',

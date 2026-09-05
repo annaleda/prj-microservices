@@ -2,9 +2,18 @@
   <a routerLink="/" class="detail__back">&larr; Torna al catalogo</a>
 
   <div class="detail__panel card">
-    <span class="detail__thumb" [style.background]="thumbnail(product)" aria-hidden="true">
-      {{ product.name.charAt(0) }}
-    </span>
+    <img
+      *ngIf="showPhoto(product); else noPhoto"
+      class="detail__photo"
+      [src]="product.imageUrl"
+      [alt]="product.name"
+      (error)="onImageError()"
+    />
+    <ng-template #noPhoto>
+      <span class="detail__thumb" [style.background]="thumbnail(product)" aria-hidden="true">
+        {{ product.name.charAt(0) }}
+      </span>
+    </ng-template>
 
     <div class="detail__info">
       <span class="detail__category">{{ product.categoryName }}</span>

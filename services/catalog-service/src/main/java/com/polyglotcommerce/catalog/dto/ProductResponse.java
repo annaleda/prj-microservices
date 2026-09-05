@@ -20,6 +20,7 @@ public class ProductResponse {
     private String description;
     private BigDecimal price;
     private String sku;
+    private String imageUrl;
     private Long categoryId;
     private String categoryName;
     private Instant createdAt;
@@ -32,6 +33,7 @@ public class ProductResponse {
                 .description(product.getDescription())
                 .price(product.getPrice())
                 .sku(product.getSku())
+                .imageUrl(product.getImageUrl())
                 .categoryId(product.getCategory() != null ? product.getCategory().getId() : null)
                 .categoryName(product.getCategory() != null ? product.getCategory().getName() : null)
                 .createdAt(product.getCreatedAt())

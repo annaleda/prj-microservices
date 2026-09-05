@@ -42,6 +42,18 @@ public class Product {
     @Column(nullable = false, unique = true)
     private String sku;
 
+    /**
+     * Indirizzo della foto del prodotto. Facoltativo: un prodotto senza
+     * immagine resta valido, e il frontend mostra un segnaposto colorato
+     * al suo posto invece di un riquadro rotto.
+     *
+     * Qui si memorizza solo l'indirizzo, non il file: la gestione dei
+     * binari (upload, ridimensionamento, CDN) e' un problema a se', da
+     * affrontare quando servira' davvero.
+     */
+    @Column(name = "image_url", length = 512)
+    private String imageUrl;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id")
     private Category category;

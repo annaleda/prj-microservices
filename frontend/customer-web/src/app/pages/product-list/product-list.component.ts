@@ -49,6 +49,17 @@ export class ProductListComponent implements OnInit {
     this.selectedCategoryId$.next(categoryId === '' ? null : Number(categoryId));
   }
 
+  /** Prodotti la cui immagine non e' stata caricata: si ripiega sul colore. */
+  private readonly brokenImages = new Set<number>();
+
+  showPhoto(product: Product): boolean {
+    return !!product.imageUrl && !this.brokenImages.has(product.id);
+  }
+
+  onImageError(product: Product): void {
+    this.brokenImages.add(product.id);
+  }
+
   /**
    * Colore della banda al posto della foto: derivato dal nome, cosi' lo
    * stesso prodotto ha sempre la stessa tinta e prodotti diversi si

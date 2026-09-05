@@ -68,6 +68,38 @@ curl -s -X POST \
   -d username=customer -d password=customer | jq -r .access_token
 ```
 
+## Tema e registrazione
+
+Le pagine di accesso, registrazione e recupero password usano il tema
+**`polyglot`** (`themes/polyglot/`, montato nel container), che ha la
+stessa grafica di Customer Web.
+
+Il tema **eredita da `keycloak` e sovrascrive solo il foglio di stile**:
+i template FreeMarker restano gli originali, cosi' un aggiornamento di
+Keycloak non obbliga a riallineare a mano pagine che non abbiamo
+scritto. Attenzione: nel `theme.properties`, `styles` *sostituisce* il
+valore del genitore invece di aggiungersi, quindi `css/login.css` va
+ripetuto accanto al nostro.
+
+La registrazione e' abilitata sul realm: la pagina la fornisce Keycloak
+(con validazione, conferma della password e controllo dei duplicati) e
+i nuovi iscritti ricevono automaticamente il ruolo `CUSTOMER` tramite i
+ruoli di default del realm — senza, otterrebbero 403 al primo ordine.
+
+Perche' il modulo di login non sta dentro l'applicazione Angular: farlo
+significherebbe usare il Direct Access Grant e far passare le password
+degli utenti dal frontend, perdendo SSO, MFA, recupero password e
+protezione dai tentativi ripetuti. Con il tema si ottiene la stessa
+grafica senza che le credenziali tocchino mai l'applicazione.
+
+## Modificare un realm gia' esistente
+
+`--import-realm` **ignora i realm gia' presenti**: cambiare il JSON non
+basta a modificare un'installazione avviata. Le due strade sono
+ricreare il database di Keycloak (`auth-db`), che rilegge il file da
+zero, oppure applicare le modifiche via API di amministrazione lasciando
+il JSON come riferimento per gli ambienti nuovi.
+
 ## Comunicazione fra servizi
 
 Il documento di design prevede anche l'**OAuth2 Client Credentials

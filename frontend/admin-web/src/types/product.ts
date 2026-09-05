@@ -4,6 +4,7 @@ export interface Product {
   description: string | null;
   price: number;
   sku: string;
+  imageUrl: string | null;
   categoryId: number | null;
   categoryName: string | null;
   createdAt: string;
@@ -15,5 +16,6 @@ export interface ProductInput {
   description: string;
   price: number;
   sku: string;
+  imageUrl: string;
   categoryId: number;
 }

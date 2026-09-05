@@ -50,6 +50,7 @@ public class ProductService {
                 .description(request.getDescription())
                 .price(request.getPrice())
                 .sku(request.getSku())
+                .imageUrl(request.getImageUrl())
                 .category(category)
                 .build();
         return ProductResponse.fromEntity(productRepository.save(product));
@@ -64,6 +65,7 @@ public class ProductService {
         product.setDescription(request.getDescription());
         product.setPrice(request.getPrice());
         product.setSku(request.getSku());
+        product.setImageUrl(request.getImageUrl());
         product.setCategory(category);
 
         return ProductResponse.fromEntity(productRepository.save(product));

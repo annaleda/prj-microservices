@@ -146,7 +146,13 @@ Console su `http://localhost:8180` (`admin`/`admin`), realm
 
 Un ordine viene intestato a **chi presenta il token**: l'email non si
 manda piu' nella richiesta, e un cliente non puo' leggere gli ordini di
-un altro (403).
+un altro (403). L'identita' e' il claim `sub`, non l'email: quest'ultima
+si puo' cambiare e chiunque puo' dichiarare quella di un altro al
+momento della registrazione.
+
+Chi non ha un account puo' **registrarsi** dal pulsante nell'header:
+la pagina e' quella di Keycloak, con la grafica del negozio, e i nuovi
+iscritti ricevono il ruolo `CUSTOMER`.
 
 ### 3.2 Ottenere un token per provare le API
 
@@ -165,7 +171,10 @@ WAREHOUSE); per loro usa `client_id=admin-web`.
 ### 3.3 Dal browser
 
 Customer Web e Admin Web fanno login con Keycloak (authorization code +
-PKCE) e allegano da soli il token alle chiamate API. In Customer Web il
+PKCE) e allegano da soli il token alle chiamate API. Le pagine di
+accesso e registrazione sono servite da Keycloak con un tema dedicato
+(`infrastructure/keycloak/themes/polyglot/`) che ne ricalca la grafica:
+le password non passano mai dall'applicazione. In Customer Web il
 catalogo si sfoglia da disconnessi e il login serve solo al checkout;
 Admin Web richiede il ruolo ADMIN per intero e lo dice esplicitamente a
 chi entra senza averlo.

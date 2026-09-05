@@ -23,12 +23,22 @@
   <div class="catalog__grid">
     <article *ngFor="let product of filteredProducts$ | async" class="product-card card">
       <a [routerLink]="['/products', product.id]" class="product-card__link">
-        <!-- Il catalogo non ha immagini: al loro posto una banda colorata
-             derivata dal nome, cosi' ogni prodotto resta riconoscibile a
-             colpo d'occhio senza inventare foto che non esistono. -->
-        <span class="product-card__thumb" [style.background]="thumbnail(product)" aria-hidden="true">
-          {{ product.name.charAt(0) }}
-        </span>
+        <img
+          *ngIf="showPhoto(product); else noPhoto"
+          class="product-card__photo"
+          [src]="product.imageUrl"
+          [alt]="product.name"
+          loading="lazy"
+          (error)="onImageError(product)"
+        />
+        <!-- Senza foto (o se non si carica) una banda colorata derivata dal
+             nome: meglio di un riquadro rotto, e il prodotto resta
+             riconoscibile a colpo d'occhio. -->
+        <ng-template #noPhoto>
+          <span class="product-card__thumb" [style.background]="thumbnail(product)" aria-hidden="true">
+            {{ product.name.charAt(0) }}
+          </span>
+        </ng-template>
 
         <span class="product-card__body">
           <span class="product-card__category">{{ product.categoryName }}</span>

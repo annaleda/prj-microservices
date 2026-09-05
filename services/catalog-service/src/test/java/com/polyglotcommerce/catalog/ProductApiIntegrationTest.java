@@ -78,7 +78,7 @@ class ProductApiIntegrationTest {
         Long catId = ensureCategory();
 
         ProductRequest createRequest = new ProductRequest("Wireless Mouse", "Ergonomic mouse",
-                new BigDecimal("29.90"), "SKU-001", catId);
+                new BigDecimal("29.90"), "SKU-001", "https://example.com/mouse.jpg", catId);
 
         ResponseEntity<ProductResponse> createResponse = restTemplate.exchange(
                 "/api/products", HttpMethod.POST, as(ADMIN, createRequest), ProductResponse.class);
@@ -91,13 +91,14 @@ class ProductApiIntegrationTest {
                 restTemplate.getForEntity("/api/products/" + productId, ProductResponse.class);
         assertThat(getResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(getResponse.getBody().getSku()).isEqualTo("SKU-001");
+        assertThat(getResponse.getBody().getImageUrl()).isEqualTo("https://example.com/mouse.jpg");
 
         ResponseEntity<ProductResponse[]> listResponse =
                 restTemplate.getForEntity("/api/products", ProductResponse[].class);
         assertThat(listResponse.getBody()).extracting(ProductResponse::getId).contains(productId);
 
         ProductRequest updateRequest = new ProductRequest("Wireless Mouse", "Ergonomic mouse",
-                new BigDecimal("24.90"), "SKU-001", catId);
+                new BigDecimal("24.90"), "SKU-001", "https://example.com/mouse.jpg", catId);
         restTemplate.exchange("/api/products/" + productId, HttpMethod.PUT,
                 as(ADMIN, updateRequest), ProductResponse.class);
 
@@ -135,7 +136,7 @@ class ProductApiIntegrationTest {
     @Test
     void writingToTheCatalogRequiresAuthentication() {
         ProductRequest request = new ProductRequest("Hacked Product", "No token",
-                new BigDecimal("1.00"), "SKU-ANON", ensureCategory());
+                new BigDecimal("1.00"), "SKU-ANON", null, ensureCategory());
 
         ResponseEntity<String> response = restTemplate.exchange(
                 "/api/products", HttpMethod.POST, as(ANONYMOUS, request), String.class);
@@ -146,7 +147,7 @@ class ProductApiIntegrationTest {
     @Test
     void writingToTheCatalogRequiresTheAdminRole() {
         ProductRequest request = new ProductRequest("Customer Product", "Wrong role",
-                new BigDecimal("1.00"), "SKU-CUST", ensureCategory());
+                new BigDecimal("1.00"), "SKU-CUST", null, ensureCategory());
 
         ResponseEntity<String> response = restTemplate.exchange(
                 "/api/products", HttpMethod.POST, as(CUSTOMER, request), String.class);
