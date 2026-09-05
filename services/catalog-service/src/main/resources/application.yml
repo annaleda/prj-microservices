@@ -9,6 +9,12 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+  servlet:
+    multipart:
+      # Tetto lato framework, oltre a quello controllato nel servizio: una
+      # richiesta enorme viene respinta prima di essere letta in memoria.
+      max-file-size: 5MB
+      max-request-size: 6MB
   security:
     oauth2:
       resourceserver:
@@ -47,3 +53,13 @@ management:
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
+
+# Object storage delle immagini dei prodotti (MinIO in locale). L'endpoint
+# e' quello che raggiunge *questo servizio*; il browser non parla mai con
+# MinIO, perche' le immagini le serve il catalogo su
+# GET /api/products/{id}/image.
+storage:
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  access-key: ${MINIO_ACCESS_KEY:minioadmin}
+  secret-key: ${MINIO_SECRET_KEY:minioadmin}
+  bucket: ${MINIO_BUCKET:product-images}

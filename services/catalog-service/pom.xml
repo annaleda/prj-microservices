@@ -21,6 +21,7 @@
         <java.version>11</java.version>
         <testcontainers.version>1.19.8</testcontainers.version>
         <springdoc.version>1.7.0</springdoc.version>
+        <awssdk.version>2.25.60</awssdk.version>
     </properties>
 
     <dependencies>
@@ -64,6 +65,16 @@
         <dependency>
             <groupId>org.springframework.kafka</groupId>
             <artifactId>spring-kafka</artifactId>
+        </dependency>
+
+        <!-- Object storage per le immagini dei prodotti. Si usa l'SDK S3 e
+             non quello specifico di MinIO: il protocollo e' lo stesso, e
+             passare a S3 o a un altro storage compatibile non richiede di
+             riscrivere il codice, solo di cambiare endpoint e credenziali. -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>${awssdk.version}</version>
         </dependency>
 
         <dependency>

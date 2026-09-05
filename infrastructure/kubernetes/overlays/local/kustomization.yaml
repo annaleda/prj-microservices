@@ -85,6 +85,9 @@ patches:
       - op: replace
         path: /data/KAFKA_BOOTSTRAP_SERVERS
         value: host.docker.internal:9094
+      - op: replace
+        path: /data/MINIO_ENDPOINT
+        value: http://host.docker.internal:9000
   - target:
       kind: ConfigMap
       name: order-service-config

@@ -54,3 +54,23 @@ export function getCategories(): Promise<Category[]> {
     handleResponse<Category[]>(r)
   );
 }
+
+/**
+ * Carica l'immagine di un prodotto sull'object storage.
+ *
+ * Il prodotto deve gia' esistere: il file viene indicizzato sul suo id.
+ * Non si imposta Content-Type a mano — con un FormData il browser deve
+ * generarlo lui, perche' include il "boundary" che separa le parti; se lo
+ * si scrive a mano quel valore manca e il server non riesce a leggere il
+ * corpo della richiesta.
+ */
+export function uploadProductImage(id: number, file: File): Promise<Product> {
+  const body = new FormData();
+  body.append('file', file);
+
+  return fetch(`${BASE_URL}/products/${id}/image`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body,
+  }).then((r) => handleResponse<Product>(r));
+}

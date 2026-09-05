@@ -6,16 +6,22 @@ import com.polyglotcommerce.catalog.event.EventEnvelope;
 import com.polyglotcommerce.catalog.event.EventTopics;
 import com.polyglotcommerce.catalog.event.OutboundEvent;
 import com.polyglotcommerce.catalog.event.payload.ProductCreatedPayload;
+import com.polyglotcommerce.catalog.exception.InvalidImageException;
 import com.polyglotcommerce.catalog.exception.ResourceNotFoundException;
 import com.polyglotcommerce.catalog.model.Category;
 import com.polyglotcommerce.catalog.model.Product;
 import com.polyglotcommerce.catalog.repository.CategoryRepository;
 import com.polyglotcommerce.catalog.repository.ProductRepository;
+import com.polyglotcommerce.catalog.storage.ProductImageStore;
+import com.polyglotcommerce.catalog.storage.StoredImage;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -28,16 +34,32 @@ import java.util.stream.Collectors;
 @Service
 public class ProductService {
 
+    /**
+     * Percorso su cui il servizio stesso serve l'immagine caricata.
+     *
+     * Nel database finisce questo, non l'indirizzo di MinIO: un URL
+     * assoluto dell'object storage cambia fra locale e cluster e
+     * resterebbe congelato in ogni riga scritta prima del cambiamento.
+     * Un percorso relativo funziona sia col proxy di sviluppo sia dietro
+     * l'API Gateway, come gia' fanno tutte le chiamate dei frontend.
+     */
+    private static final String IMAGE_PATH = "/api/products/%d/image";
+
+    private static final long MAX_IMAGE_BYTES = 5L * 1024 * 1024;
+
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final ProductImageStore imageStore;
 
     public ProductService(ProductRepository productRepository,
                           CategoryRepository categoryRepository,
-                          ApplicationEventPublisher eventPublisher) {
+                          ApplicationEventPublisher eventPublisher,
+                          ProductImageStore imageStore) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
         this.eventPublisher = eventPublisher;
+        this.imageStore = imageStore;
     }
 
     @Transactional(readOnly = true)
@@ -89,6 +111,50 @@ public class ProductService {
     public void delete(Long id) {
         Product product = getProductOrThrow(id);
         productRepository.delete(product);
+        imageStore.deleteQuietly(id);
+    }
+
+    /**
+     * Carica l'immagine di un prodotto e ne aggiorna il riferimento.
+     *
+     * Due sistemi in un'operazione sola: il file va sull'object storage, il
+     * riferimento nel database. Si scrive prima il file, cosi' se il
+     * caricamento fallisce il prodotto resta con l'immagine di prima invece
+     * di puntare a un file che non esiste. Il caso opposto -- file scritto
+     * e transazione annullata -- lascia un oggetto orfano nel bucket, che e'
+     * spazio sprecato e non un dato sbagliato.
+     */
+    @Transactional
+    public ProductResponse uploadImage(Long id, MultipartFile file) {
+        Product product = getProductOrThrow(id);
+
+        if (file == null || file.isEmpty()) {
+            throw new InvalidImageException("Nessun file caricato");
+        }
+        if (file.getSize() > MAX_IMAGE_BYTES) {
+            throw new InvalidImageException("Immagine troppo grande: il limite e' 5 MB");
+        }
+        String contentType = file.getContentType();
+        if (contentType == null || !contentType.startsWith("image/")) {
+            throw new InvalidImageException("Il file non e' un'immagine (tipo: " + contentType + ")");
+        }
+
+        try {
+            imageStore.put(id, file.getBytes(), contentType);
+        } catch (IOException e) {
+            throw new InvalidImageException("Impossibile leggere il file caricato: " + e.getMessage());
+        }
+
+        product.setImageUrl(String.format(IMAGE_PATH, id));
+        return ProductResponse.fromEntity(productRepository.save(product));
+    }
+
+    /**
+     * L'immagine caricata, se c'e'. Sola lettura e senza transazione di
+     * scrittura: e' un file, non un dato del dominio.
+     */
+    public Optional<StoredImage> findImage(Long id) {
+        return imageStore.find(id);
     }
 
     /**

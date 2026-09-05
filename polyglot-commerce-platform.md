@@ -82,6 +82,7 @@ Kubernetes; - espone metriche, log e tracing.
   Integration Service    Spring Boot + Apache Camel   Integrazioni
   Notification Service   Spring Boot + Camel          Notifiche
   Analytics Service      Python + FastAPI             Analytics
+  Object Storage         MinIO (S3-compatibile)       Immagini dei prodotti
 
 ## 5. Backend Services
 
@@ -112,7 +113,25 @@ POST /api/products
 PUT /api/products/{id}
 DELETE /api/products/{id}
 GET /api/categories
+
+POST /api/products/{id}/image
+GET  /api/products/{id}/image
 ```
+
+Un prodotto puo' avere l'immagine come **indirizzo esterno** (`imageUrl`
+con un URL assoluto) oppure come **file caricato**: in quel caso il
+binario va su un object storage S3-compatibile (MinIO in locale) e
+`imageUrl` diventa `/api/products/{id}/image`, servito dal servizio
+stesso.
+
+Nel database resta solo il riferimento, mai i byte: un file per riga
+appesantirebbe ogni backup e ogni lettura della tabella prodotti, e
+un'immagine non ha nulla di transazionale. Il percorso salvato e'
+**relativo** e non l'indirizzo dell'object storage, che e' diverso fra
+locale e cluster e resterebbe congelato nelle righe gia' scritte --
+lo stesso inciampo dell'issuer di Keycloak, qui evitato per
+costruzione. Dettagli in
+`infrastructure/minio/README.md`.
 
 Pubblica `product.created` alla creazione di un prodotto. Serve
 all'Inventory Service, che apre la riga di magazzino corrispondente:
@@ -163,7 +182,9 @@ unita' sono disponibili (riservato ai ruoli WAREHOUSE e ADMIN). Si
 dichiara il totale e non una variazione, come fa chi conta cio' che ha
 sullo scaffale; le unita' gia' riservate da ordini in corso restano
 intatte. E' l'unico modo di aumentare le scorte: la saga sa solo
-riservare e rilasciare.
+riservare e rilasciare. Da Admin Web e' il campo "Scorte disponibili"
+del form prodotto; l'elenco segnala i prodotti a zero, che sono in
+vetrina ma non ordinabili.
 
 Eventi:
 

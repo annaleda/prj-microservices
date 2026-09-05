@@ -32,7 +32,7 @@ evento, solo REST + database); per il flusso a eventi vedi la
 Dalla root del progetto:
 
 ```bash
-docker compose up -d catalog-db kafka kafka-init
+docker compose up -d catalog-db kafka kafka-init minio minio-init
 docker compose ps
 ```
 
@@ -44,6 +44,10 @@ Kafka serve anche solo per il catalogo: alla creazione di un prodotto
 il servizio pubblica `product.created`. Senza broker raggiungibile la
 lettura del catalogo funziona lo stesso, ma la creazione di un
 prodotto resta in attesa finche' il producer non rinuncia.
+
+MinIO serve invece per le immagini caricate da Admin Web (vedi
+[infrastructure/minio/README.md](infrastructure/minio/README.md)); i
+prodotti con un'immagine a indirizzo esterno funzionano anche senza.
 
 > Per avviare **tutti** i database del progetto (utile se in futuro si
 > lavora anche su altri servizi) basta omettere il nome del servizio:
@@ -249,10 +253,13 @@ le scorte con `PUT /api/inventory/{id}`, usando il token dell'utente
 `warehouse`. Legge il catalogo invece di conoscerlo: una lista di id
 scritta a mano si disallinea appena il catalogo cambia.
 
-Un prodotto creato dopo (da Admin Web o via API) ottiene subito la sua
-riga di magazzino — il Catalog Service pubblica `product.created` e
-l'Inventory Service la crea — ma **a zero pezzi**: le unita' vanno
-dichiarate, con lo script oppure a mano:
+Un prodotto creato dopo ottiene subito la sua riga di magazzino — il
+Catalog Service pubblica `product.created` e l'Inventory Service la
+crea — ma **a zero pezzi**: le unita' vanno dichiarate.
+
+Da **Admin Web** il form del prodotto ha il campo "Scorte disponibili",
+e l'elenco marca in rosso i prodotti a zero (`non ordinabile`). Via API,
+con lo script qui sopra oppure a mano:
 
 ```bash
 WAREHOUSE=$(get_token warehouse admin-web)
@@ -324,7 +331,35 @@ checkout crea l'ordine e ne attende l'esito, mostrando "ordine
 confermato" o "ordine annullato" quando la saga si chiude. Servono anche
 Catalog Service (8081) per il catalogo e Keycloak per il login.
 
-## 5. Avviare l'infrastruttura Kubernetes con API Gateway
+## 5. Immagini dei prodotti
+
+Un prodotto puo' avere l'immagine in due modi, scelti nel form di Admin
+Web:
+
+- **indirizzo esterno**: `imageUrl` contiene un URL assoluto (i prodotti
+  dimostrativi usano loremflickr). Nulla viene caricato da noi, e se il
+  sito di origine rimuove l'immagine il prodotto resta senza foto;
+- **file caricato**: il file va su MinIO e `imageUrl` diventa
+  `/api/products/{id}/image`, servito dal Catalog Service.
+
+Nel database non finiscono mai i byte, solo il riferimento. Da riga di
+comando:
+
+```bash
+ADMIN=$(get_token admin admin-web)
+
+# caricare
+curl -s -X POST http://localhost:8081/api/products/15/image   -H "Authorization: Bearer $ADMIN" -F "file=@foto.png;type=image/png"
+
+# rileggere (pubblico, come il resto del catalogo)
+curl -s -o scaricata.png http://localhost:8081/api/products/15/image
+```
+
+Limite 5 MB, solo tipi `image/*`; il caricamento richiede il ruolo
+ADMIN, la lettura no. La console di MinIO e' su
+`http://localhost:9001` (`minioadmin`/`minioadmin`).
+
+## 6. Avviare l'infrastruttura Kubernetes con API Gateway
 
 I manifest si trovano in `infrastructure/kubernetes/` (pattern
 base/overlays con Kustomize) e usano la **Kubernetes Gateway API**
@@ -338,7 +373,7 @@ alla prima esecuzione.
 
 - `kubectl`, `kind`, `helm` (già presenti su questa macchina)
 
-### 5.1 Creare un cluster dedicato
+### 6.1 Creare un cluster dedicato
 
 Usa un cluster **dedicato al progetto**, non un cluster kind già in
 uso per altro:
@@ -348,7 +383,7 @@ kind create cluster --name polyglot-commerce
 kubectl config use-context kind-polyglot-commerce
 ```
 
-### 5.2 Installare Envoy Gateway (il controller della Gateway API)
+### 6.2 Installare Envoy Gateway (il controller della Gateway API)
 
 ```bash
 helm install eg oci://docker.io/envoyproxy/gateway-helm \
@@ -360,7 +395,7 @@ kubectl wait --timeout=5m -n envoy-gateway-system \
   deployment/envoy-gateway --for=condition=Available
 ```
 
-### 5.3 Costruire e caricare le immagini dei servizi
+### 6.3 Costruire e caricare le immagini dei servizi
 
 Il cluster kind non ha accesso automatico alle immagini Docker locali:
 vanno costruite e caricate esplicitamente, una per servizio.
@@ -372,7 +407,7 @@ for svc in catalog-service order-service inventory-service payment-service integ
 done
 ```
 
-### 5.4 Applicare i manifest (overlay locale)
+### 6.4 Applicare i manifest (overlay locale)
 
 ```bash
 kubectl apply -k infrastructure/kubernetes/overlays/local
@@ -388,7 +423,7 @@ kubectl -n polyglot-commerce get gateway polyglot-commerce-gateway
 > di rete diversa). Assicurati quindi che `docker compose up -d` (tutti
 > i database) sia attivo **prima** di applicare questo overlay.
 
-### 5.5 Esporre il Gateway e testare il routing
+### 6.5 Esporre il Gateway e testare il routing
 
 Envoy Gateway crea un `Service` per il listener HTTP del `Gateway`.
 Su kind (senza LoadBalancer reale) si usa `port-forward`:
@@ -421,7 +456,7 @@ Se tutto funziona, le richieste passano: client → Gateway (Envoy) →
 > un token valido, e li' entra in gioco l'avvertenza sull'issuer scritta
 > nell'overlay `local`.
 
-### 5.6 Pulizia
+### 6.6 Pulizia
 
 ```bash
 kind delete cluster --name polyglot-commerce
@@ -433,7 +468,8 @@ kind delete cluster --name polyglot-commerce
 
 `infrastructure/demo/` contiene gli script che preparano i dati
 dimostrativi (oggi solo `seed-stock.sh`, il rifornimento del
-magazzino).
+magazzino). `infrastructure/minio/` documenta l'object storage delle
+immagini.
 
 Vedi la sezione "Repository Structure" in
 [polyglot-commerce-platform.md](polyglot-commerce-platform.md) per la

@@ -1,17 +1,40 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { deleteProduct, getProducts } from '../api/catalogApi';
+import { getInventory } from '../api/inventoryApi';
 import { Product } from '../types/product';
 
 export default function ProductListPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  // Le scorte vivono in un altro servizio: si leggono a parte, un prodotto
+  // alla volta, e si tengono qui indicizzate per id.
+  const [stock, setStock] = useState<Record<number, number | null>>({});
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadProducts = () => {
     setLoading(true);
     getProducts()
-      .then(setProducts)
+      .then(async (list) => {
+        setProducts(list);
+        // Il magazzino non ha un endpoint per leggere piu' prodotti in una
+        // volta: con un catalogo grande questo diventerebbe un problema, e
+        // la risposta sarebbe una lettura in blocco lato servizio, non un
+        // ciclo piu' furbo qui.
+        const entries = await Promise.all(
+          list.map(async (p) => {
+            try {
+              const inventory = await getInventory(p.id);
+              return [p.id, inventory ? inventory.quantityAvailable : null] as const;
+            } catch {
+              // Le scorte illeggibili non devono impedire di vedere il
+              // catalogo: la colonna resta vuota.
+              return [p.id, null] as const;
+            }
+          })
+        );
+        setStock(Object.fromEntries(entries));
+      })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
   };
@@ -53,6 +76,7 @@ export default function ProductListPage() {
               <th>Categoria</th>
               <th>SKU</th>
               <th>Prezzo</th>
+              <th>Scorte</th>
               <th />
             </tr>
           </thead>
@@ -63,6 +87,20 @@ export default function ProductListPage() {
                 <td>{p.categoryName}</td>
                 <td>{p.sku}</td>
                 <td>{p.price.toFixed(2)} &euro;</td>
+                <td>
+                  {stock[p.id] === null || stock[p.id] === undefined ? (
+                    <span title="Il magazzino non ha ancora una riga per questo prodotto">&mdash;</span>
+                  ) : stock[p.id] === 0 ? (
+                    // Zero pezzi non e' un dettaglio: il prodotto e' in
+                    // vetrina ma ogni ordine che lo contiene verra'
+                    // annullato dalla saga.
+                    <span className="stock stock--empty" title="Non ordinabile: ogni ordine verrebbe annullato">
+                      0 &middot; non ordinabile
+                    </span>
+                  ) : (
+                    stock[p.id]
+                  )}
+                </td>
                 <td className="actions">
                   <Link to={`/products/${p.id}/edit`}>Modifica</Link>
                   <button onClick={() => handleDelete(p.id)}>Elimina</button>

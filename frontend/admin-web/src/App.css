@@ -60,3 +60,69 @@
   display: flex;
   gap: 0.75rem;
 }
+
+/* Scorte nella lista prodotti: zero pezzi va notato, non letto per caso. */
+.stock--empty {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: #fde8e8;
+  color: #a12b2b;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.form small {
+  display: block;
+  margin-top: 0.25rem;
+  font-weight: 400;
+  font-size: 0.8rem;
+  color: #666;
+}
+
+/* Scelta fra indirizzo esterno e file caricato. */
+.image-field {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 0.75rem 1rem 1rem;
+  margin: 0;
+}
+
+.image-field legend {
+  padding: 0 0.4rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.image-field__choice {
+  display: flex;
+  gap: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.image-field__option {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.image-field__option input {
+  width: auto;
+  margin: 0;
+}
+
+.image-field__preview {
+  margin-top: 0.75rem;
+}
+
+.image-field__preview img {
+  max-width: 220px;
+  max-height: 160px;
+  object-fit: cover;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  display: block;
+}

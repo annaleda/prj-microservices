@@ -79,7 +79,7 @@ def login(client):
     Sostituisce la sola dipendenza che valida il token: le regole di
     autorizzazione degli endpoint restano quelle vere, mentre non serve un
     Keycloak in piedi per ogni test. Che i token veri vengano accettati e'
-    verificato end-to-end a mano (vedi README, sezione 5).
+    verificato end-to-end a mano (vedi README, sezione 3 "Autenticazione con Keycloak").
     """
     from app.main import app
     from app.security import Principal, current_principal

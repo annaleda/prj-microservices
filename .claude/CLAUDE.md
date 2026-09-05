@@ -1102,6 +1102,148 @@ Files/Git/opt/kafka/...`): serve `MSYS_NO_PATHCONV=1`.
 visto che le scorte hanno un endpoint per essere gestite e nessuna
 interfaccia che lo usi.
 
+### 23. Un prodotto creato da Admin Web restava invendibile
+
+Segnalazione dell'utente subito dopo la sezione 22: creato un "frigo bar"
+da Admin Web, il checkout su Customer Web non arrivava in fondo.
+
+Non un nuovo bug ma **il limite che avevo dichiarato chiudendo la sezione
+22**, incontrato subito: il prodotto (id 14) *aveva* la sua riga di
+magazzino -- `product.created` aveva funzionato -- ma a zero pezzi, e
+Admin Web non aveva nessuna schermata per rifornirlo. L'ordine 31 e'
+stato annullato con `INVENTORY_REJECTED`, cioe' il sistema si e'
+comportato correttamente e lo ha pure detto; a mancare era il modo di
+rimediare. Dichiarare un limite in fondo a un messaggio non e' lo stesso
+che chiuderlo: se l'unico modo di rifornire un prodotto e' una chiamata
+`curl`, il prodotto e' invendibile per chi usa l'interfaccia.
+
+**Admin Web ora gestisce le scorte.**
+
+- `vite.config.ts`: il proxy mandava tutto `/api` al catalogo; ora
+  `/api/inventory` va all'Inventory Service (8083), stesso schema per
+  prefisso gia' usato da Customer Web. Va riavviato il dev server, il
+  file si legge solo all'avvio.
+- `api/inventoryApi.ts`: lettura e dichiarazione delle scorte. Il **404
+  non e' un errore** ma "scorte non ancora dichiarate" -- capita sui
+  prodotti nati prima di `product.created` -- e restituisce `null`
+  invece di far fallire la pagina.
+- Form prodotto: campo "Scorte disponibili". Il salvataggio sono **due
+  passi verso due servizi diversi**, e possono fallire separatamente: se
+  il prodotto viene salvato e le scorte no, il messaggio lo dice
+  esplicitamente invece di far credere che non sia stato salvato nulla.
+  L'alternativa sarebbe una transazione distribuita fra due database.
+  In modifica il campo mostra le scorte attuali, e le unita' gia'
+  riservate da ordini in corso sono indicate a parte: il rifornimento
+  dichiara il totale sullo scaffale, non tocca cio' che e' gia'
+  promesso.
+- Lista prodotti: colonna "Scorte", con **0 marcato in rosso e
+  "non ordinabile"**. E' l'informazione che mancava del tutto: un
+  prodotto in vetrina che nessuno puo' comprare non si distingueva
+  dagli altri.
+
+**Verifica end-to-end nella sequenza esatta del form**: creato un
+prodotto (id 15) e dichiarate 15 unita' *subito dopo*, senza attendere
+il consumer. Il `PUT` arriva prima di `product.created` e crea lui la
+riga; quando l'evento arriva, `ensure_item` la trova e **non la
+azzera** -- e' la ragione per cui era stato scritto idempotente, qui
+verificata dal vivo e non solo nei test. Il cliente ordina, ordine
+CONFIRMED, scorte 15 -> 13.
+
+Admin Web non ha ancora alcun framework di test (a differenza di
+Customer Web): queste modifiche sono verificate da `tsc` + build e dalla
+prova end-to-end, non da test automatici. E' una delle cose da
+affrontare nella revisione di Admin Web.
+
+### 24. Immagini caricate: object storage (MinIO)
+
+Richiesta dell'utente: nel form di Admin Web, poter scegliere se
+**caricare direttamente l'immagine** o inserirne l'URL.
+
+Fin qui il prodotto memorizzava solo un indirizzo (sezione 21), con una
+scelta dichiarata: "gestire i binari e' un problema a se', da affrontare
+quando servira' davvero". Servito.
+
+**Decisione presa dall'utente** fra due strade proposte: object storage
+**MinIO** invece dei binari nel database del catalogo. Costa un
+container in piu' ma e' cio' che si userebbe davvero, coerente con
+l'impostazione del progetto (Kafka vero, Keycloak vero, Testcontainers
+invece di mock).
+
+**Infrastruttura**: `minio` + `minio-init` in `docker-compose.yml`, sullo
+schema gia' usato per Kafka -- un server e un container "one-shot" che
+crea il bucket `product-images`. Il bucket **non** lo crea il servizio:
+creare bucket e' un permesso che a un'applicazione, su uno storage vero,
+non si concede.
+
+**La decisione non ovvia: il bucket resta privato.** La strada facile
+sarebbe stata un bucket pubblico con `imageUrl` che punta direttamente a
+MinIO. Ma quell'URL e' assoluto, e' diverso in locale e dentro un
+cluster, e resterebbe **congelato in ogni riga** scritta prima di un
+cambiamento -- e' lo stesso inciampo dell'issuer di Keycloak descritto
+nella sezione 15, che li' era stato solo annotato come "da verificare al
+primo deploy". Qui e' evitato per costruzione: nel database va un
+percorso **relativo** (`/api/products/{id}/image`) e le immagini le
+serve il Catalog Service, che del catalogo e' gia' proprietario e ne
+conosce le regole di accesso (lettura pubblica, come la vetrina). Il
+browser non parla mai con MinIO. Il prezzo e' che i byte passano dal
+servizio; il passo successivo sarebbe un redirect a un URL prefirmato.
+
+Usato l'**SDK S3** e non quello specifico di MinIO: il protocollo e' lo
+stesso e passare a S3 non richiede di riscrivere codice.
+
+**Catalog Service**: `POST /api/products/{id}/image` (multipart, ADMIN) e
+`GET /api/products/{id}/image` (pubblico, con `Cache-Control` di un'ora
+-- l'URL e' stabile e senza quell'intestazione il browser riscarica
+tutto ad ogni visita del catalogo). Limite 5 MB e solo tipi `image/*`,
+controllati sia dal framework sia nel servizio. La chiave e'
+`products/{id}`: un'immagine per prodotto, ricaricare sostituisce senza
+lasciare orfani, ed eliminare il prodotto cancella anche il file (senza
+far fallire l'eliminazione se lo storage non risponde: un file rimasto
+indietro e' spazio sprecato, non un errore da mostrare a chi ha premuto
+"Elimina").
+
+L'ordine delle due scritture e' voluto: **prima il file, poi il
+riferimento**. Se il caricamento fallisce il prodotto resta con
+l'immagine di prima, invece di puntare a un file che non esiste; il caso
+opposto lascia un oggetto orfano nel bucket, che e' spazio sprecato e
+non un dato sbagliato.
+
+**Admin Web**: due opzioni nel form ("Indirizzo esterno" / "Carica un
+file"), con anteprima di cio' che si sta per salvare. Aprendo un
+prodotto in modifica il form parte gia' nella modalita' giusta,
+riconoscendo dall'indirizzo se l'immagine era caricata. Il file si
+manda **dopo** aver salvato il prodotto, perche' viene indicizzato sul
+suo id, che prima non esiste; se quel passo fallisce il messaggio lo
+dice invece di far credere che non sia stato salvato nulla -- stesso
+criterio gia' usato per le scorte nella sezione 23.
+
+*Dettaglio che si sbaglia spesso*: con un `FormData` non si imposta
+`Content-Type` a mano. Deve generarlo il browser, perche' include il
+"boundary" che separa le parti; scrivendolo a mano quel valore manca e
+il server non riesce a leggere il corpo.
+
+**Test**: Catalog 10/10 (quattro nuovi, con un **MinIO vero** via
+Testcontainers accanto a Postgres e Kafka): il file torna indietro
+identico byte per byte passando davvero da S3, un prodotto senza
+immagine caricata da 404 e non 500, un file che non e' un'immagine viene
+respinto, e il caricamento richiede ADMIN.
+
+**Verifica end-to-end**: caricata un'immagine attraverso il proxy di
+Admin Web, riletta senza token, byte identici, oggetto presente nel
+bucket e percorso relativo nel database. Nel frattempo l'utente aveva
+gia' caricato dal browser un PNG da 1,5 MB sul "frigo bar": funzionava,
+e si vede da entrambi i frontend (che usano due proxy diversi).
+
+**Kubernetes**: `MINIO_ENDPOINT`/`MINIO_BUCKET` nel ConfigMap del
+catalog-service e le credenziali nel Secret, con l'overlay `local` che
+punta a `host.docker.internal:9000`. Qui non c'e' il problema dei due
+URL diversi, proprio perche' il browser non raggiunge mai MinIO.
+
+*Piccola pulizia collaterale*: quattro file di test rimandavano a
+"README, sezione 5" per la verifica dei token veri, ma la sezione di
+Keycloak e' la 3 -- riferimento gia' sbagliato prima, corretto ora che
+la rinumerazione del README lo rendeva ancora piu' fuorviante.
+
 ### In sospeso: Admin Web
 
 Annotazione dell'utente (5 settembre 2026): **la parte admin e' messa
@@ -1109,9 +1251,14 @@ male**, da rivedere in una sessione successiva.
 
 Contesto per quando si riprendera': Admin Web (`frontend/admin-web/`,
 React + Vite) e' l'unica parte rimasta indietro rispetto al resto. Ha
-ricevuto solo il minimo indispensabile - login OIDC e blocco per chi non
-ha il ruolo ADMIN - mentre il sistema di stili, la tipografia Inter, le
-schede e i riquadri di stato introdotti in Customer Web (sezione 19) non
-sono mai stati portati qui: usa ancora il CSS generato dal template di
-Vite. Da chiarire con l'utente se il problema sia l'aspetto, la
-struttura delle pagine (oggi solo elenco prodotti e form) o entrambi.
+ricevuto solo il minimo indispensabile - login OIDC, blocco per chi non
+ha il ruolo ADMIN e, dalla sezione 23, la gestione delle scorte - mentre
+il sistema di stili, la tipografia Inter, le schede e i riquadri di
+stato introdotti in Customer Web (sezione 19) non sono mai stati portati
+qui: usa ancora il CSS generato dal template di Vite. Manca inoltre
+qualsiasi framework di test.
+
+Da chiarire con l'utente se il problema sia l'aspetto, la struttura
+delle pagine (oggi elenco prodotti, form e scorte - niente ordini,
+pagamenti o prenotazioni, che pure i ruoli ADMIN/WAREHOUSE
+permetterebbero) o entrambi.

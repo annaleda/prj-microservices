@@ -25,7 +25,7 @@ import java.util.stream.Collectors;
  * puo' fare cosa), non che Keycloak sappia firmare un JWT. Avviare un
  * identity provider per ogni classe di test costerebbe minuti e legherebbe
  * i test alla sua configurazione. Che i token veri di Keycloak vengano
- * accettati e' verificato end-to-end a mano (vedi README, sezione 5).
+ * accettati e' verificato end-to-end a mano (vedi README, sezione 3 "Autenticazione con Keycloak").
  *
  * Due dettagli non ovvi:
  * <ul>
